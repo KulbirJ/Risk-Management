@@ -1,0 +1,37 @@
+	• Malicious Code/Software: Is any code in any part of a software system or script that is intended to cause undesired effects or damage to a system, includes attack scripts, backdoors and malicious active content.   
+
+	• Social Engineering (Phishing): Phishing scams are fraudulent attempts by cybercriminals to obtain private information. 
+
+	• Man-in-the-middle attack/Eavesdropping: Is a type of cyberattack where a malicious actor intercepts a conversation between two parties and gains access to information that the two parties were trying to send to each other 
+
+	• Password Cracking/Credential/Access Management: The process of using various techniques to discover computer passwords.  Stealing computer-based information from an unknowing victim with the intent of compromising privacy or obtaining sensitive information. 
+
+	• System penetration/Hacking: Is an attempt to gain unauthorized access to the GoS IT infrastructure by trying to exploit vulnerabilities.   
+
+	• Disruption of Service Provider/Denial of Service: Partial or Complete outage of service i.e., termination of contract or forces of nature. 
+
+	• Unauthorized access: when someone gains access to a website, program, server, service, or other system using someone else's account or other methods 
+	
+	• Data loss/Data Leakage: an error condition in information systems in which information is destroyed by failures or neglect in storage, transmission, or processing 
+
+	• Insider Threats: Individuals within the organization (employees, contractors, partners) who intentionally or unintentionally pose a risk to systems or data. This includes data theft, sabotage, and accidental leaks.
+
+	• Supply Chain Attacks: Compromising a system, network, or organization through vulnerabilities in third-party vendors, partners, or software/hardware suppliers.
+
+	• Advanced Persistent Threats (APTs): Sophisticated, targeted attacks, typically by state-sponsored or highly skilled adversary groups, that persist in a network for extended periods to steal data or disrupt operations.
+
+	• Ransomware: Malware that encrypts files/systems and demands payment for decryption. May include data exfiltration threats.
+
+	• Zero-Day Exploits: Attacks using vulnerabilities that are unknown to the software vendor and have no patches available.
+
+	• Web Application Attacks: Such as SQL injection, cross-site scripting (XSS), and cross-site request forgery (CSRF) targeting web-based applications.
+	
+	• Physical Security Breaches: Unauthorized physical access to infrastructure that could compromise IT assets or data.
+
+	• Malware Loaded Removable Media: Attacks via infected USB drives or portable storage devices introduced into secure environments.
+	
+	• Misconfiguration and Weak Security Controls: Poorly configured systems, default credentials, or inadequate policies leading to vulnerabilities.
+
+	• Cloud Security Threats: Risks associated with cloud infrastructure, such as misconfigured cloud storage, account hijacking, or insecure APIs.
+
+	• IoT and OT System Threats: Vulnerabilities and attacks targeting Internet-of-Things devices and operational technology environments.
