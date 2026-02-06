@@ -8,7 +8,6 @@ version = "0.1.0"
 description = "Cybersecurity Risk Assessment Compliance Platform - Phase 0 MVP"
 requires-python = ">=3.11"
 authors = [{name = "Development Team", email = "dev@compliance-platform.local"}]
-license = {text = "MIT"}
 
 dependencies = [
     "fastapi==0.109.0",
