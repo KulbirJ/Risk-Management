@@ -2,6 +2,9 @@
 requires = ["setuptools>=65.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = ["backend"]
+
 [project]
 name = "compliance-platform-mvp"
 version = "0.1.0"
