@@ -94,21 +94,22 @@ jobs:
           name: image-definitions
           path: deployment/
       
-      - name: Update ECS task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: infrastructure/ecs/task-definition-staging.json
-          container-name: compliance-platform-backend
-          image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+      # TODO: Create infrastructure/ecs/task-definition-staging.json before enabling
+      # - name: Update ECS task definition
+      #   id: task-def
+      #   uses: aws-actions/amazon-ecs-render-task-definition@v1
+      #   with:
+      #     task-definition: infrastructure/ecs/task-definition-staging.json
+      #     container-name: compliance-platform-backend
+      #     image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
       
-      - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: compliance-platform-staging
-          cluster: compliance-platform-staging
-          wait-for-service-stability: true
+      # - name: Deploy to ECS
+      #   uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      #   with:
+      #     task-definition: ${{ steps.task-def.outputs.task-definition }}
+      #     service: compliance-platform-staging
+      #     cluster: compliance-platform-staging
+      #     wait-for-service-stability: true
       
       - name: Create GitHub Deployment
         uses: actions/github-script@v6
