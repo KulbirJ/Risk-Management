@@ -6,8 +6,8 @@ from alembic import context
 
 # Import Base for autogenerate
 import sys
-# Add backend directory to path (go up 4 levels from alembic dir to backend)
-backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
+# Add backend directory to path (go up 3 levels from alembic dir to backend)
+backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 sys.path.insert(0, backend_path)
 
 from app.db.database import Base
