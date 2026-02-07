@@ -108,8 +108,8 @@ jobs:
       
       - name: Run Alembic migrations
         run: |
-          cd backend/app/db/alembic
-          alembic upgrade head
+          cd backend
+          alembic -c app/db/alembic/alembic.ini upgrade head
         env:
           DATABASE_URL: postgresql://admin:admin_password@localhost:5432/multitenantpostgresdb
       
