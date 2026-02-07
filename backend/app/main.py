@@ -93,3 +93,16 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+# AWS Lambda handler
+try:
+    from mangum import Mangum
+    # Configure Mangum for Lambda with optimizations
+    lambda_handler = Mangum(
+        app,
+        lifespan="off",  # Disable lifespan for Lambda cold starts
+        api_gateway_base_path="/",  # API Gateway stage path
+    )
+except ImportError:
+    # Mangum not installed, likely running locally
+    lambda_handler = None

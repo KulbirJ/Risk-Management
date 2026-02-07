@@ -1,4 +1,4 @@
-name: Build & Push to ECR
+name: Deploy to AWS Lambda & Amplify
 
 on:
   push:
@@ -10,8 +10,8 @@ on:
 
 env:
   AWS_REGION: ca-west-1
-  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ca-west-1.amazonaws.com
-  ECR_REPOSITORY: compliance-platform-mvp
+  LAMBDA_FUNCTION_NAME: compliance-platform-api
+  PYTHON_VERSION: '3.11'
 
 jobs:
   build-and-push:
