@@ -63,7 +63,7 @@ jobs:
           EOF
       
       - name: Upload deployment artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: image-definitions
           path: deployment/image-definitions.json
