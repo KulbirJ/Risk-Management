@@ -7,7 +7,7 @@ echo.
 
 set REPO_URL=https://github.com/your-org/compliance-platform-mvp.git
 set AWS_ACCOUNT_ID=031195399879
-set AWS_REGION=ca-central-1
+set AWS_REGION=ca-west-1
 set ECR_REPOSITORY=compliance-platform-mvp
 set GITHUB_ORG=your-org
 set GITHUB_REPO=compliance-platform-mvp

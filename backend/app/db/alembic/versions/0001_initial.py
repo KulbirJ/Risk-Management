@@ -22,7 +22,7 @@ def upgrade() -> None:
         'tenants',
         sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('name', sa.String(255), nullable=False),
-        sa.Column('region', sa.String(50), server_default='ca-central-1'),
+        sa.Column('region', sa.String(50), server_default='ca-west-1'),
         sa.Column('settings', postgresql.JSONB(), server_default='{}'),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id')

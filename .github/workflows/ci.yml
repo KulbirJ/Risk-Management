@@ -93,7 +93,7 @@ jobs:
           LOG_LEVEL=INFO
           DATABASE_URL=postgresql://admin:admin_password@localhost:5432/multitenantpostgresdb
           USE_SECRETS_MANAGER=False
-          AWS_REGION=ca-central-1
+          AWS_REGION=ca-west-1
           REDIS_URL=redis://localhost:6379/0
           JWT_SECRET_KEY=test-secret-key-for-testing-only
           ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000

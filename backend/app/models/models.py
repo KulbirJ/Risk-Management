@@ -14,7 +14,7 @@ class Tenant(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     name = Column(String(255), nullable=False)
-    region = Column(String(50), default="ca-central-1")
+    region = Column(String(50), default="ca-west-1")
     settings = Column(JSONB, default={})  # retention, consent flags, etc.
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 

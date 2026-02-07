@@ -21,18 +21,18 @@ class Settings(BaseSettings):
     db_secret_arn: Optional[str] = None
 
     # AWS
-    aws_region: str = "ca-central-1"
+    aws_region: str = "ca-west-1"
     aws_account_id: str = "031195399879"
 
     # S3
     s3_bucket_evidence: str = "compliance-platform-dev-evidence"
-    s3_bucket_region: str = "ca-central-1"
+    s3_bucket_region: str = "ca-west-1"
 
     # Cognito / Auth
     cognito_user_pool_id: str = ""
     cognito_client_id: str = ""
     cognito_client_secret: Optional[str] = None
-    cognito_region: str = "ca-central-1"
+    cognito_region: str = "ca-west-1"
     cognito_domain: str = "compliance-platform-dev"
 
     # JWT
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # Secrets Manager (for AWS deployment)
     use_secrets_manager: bool = False
-    secrets_manager_region: str = "ca-central-1"
+    secrets_manager_region: str = "ca-west-1"
 
     # Local Development
     use_localstack: bool = False
@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     # Phase 1: AI/Intelligence (not used in Phase 0)
     bedrock_enabled: bool = False
     bedrock_model_id: str = "anthropic.claude-v2"
-    bedrock_region: str = "ca-central-1"
+    bedrock_region: str = "ca-west-1"
     openai_api_key: Optional[str] = None
 
     class Config:

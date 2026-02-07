@@ -8,7 +8,7 @@ echo "=== Setting up CI/CD Environment ==="
 # Variables
 REPO_URL="https://github.com/your-org/compliance-platform-mvp.git"
 AWS_ACCOUNT_ID="031195399879"
-AWS_REGION="ca-central-1"
+AWS_REGION="ca-west-1"
 ECR_REPOSITORY="compliance-platform-mvp"
 GITHUB_ORG="your-org"
 GITHUB_REPO="compliance-platform-mvp"
