@@ -8,12 +8,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Copy application code and dependencies
 COPY pyproject.toml .
-RUN pip install --no-cache-dir -e .
-
-# Copy application code
 COPY backend/ ./backend/
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -e .
 
 # Expose port
 EXPOSE 8000

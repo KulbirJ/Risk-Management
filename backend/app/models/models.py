@@ -82,6 +82,7 @@ class Threat(Base):
     catalogue_key = Column(String(255), nullable=True, index=True)  # Reference to threat catalogue
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    recommendation = Column(Text, nullable=True)
     detected_by = Column(String(50), default="manual")  # scan, diagram, manual, ai
     cve_ids = Column(JSONB, default=[])  # ["CVE-2023-1234", ...]
     cvss_score = Column(String(10), nullable=True)  # e.g., "7.5"
@@ -89,6 +90,7 @@ class Threat(Base):
     likelihood_score = Column(Integer, default=0)  # 0-100 (future use for Phase 1)
     impact = Column(String(20), default="Medium")  # Low, Medium, High, Critical
     severity = Column(String(20), default="Medium")  # Low, Medium, High, Critical (computed)
+    status = Column(String(20), default="identified")  # identified, in_review, at_risk, mitigated
     ai_rationale = Column(Text, nullable=True)  # (future use for Phase 1 — AI explanation)
     created_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
@@ -165,6 +167,7 @@ class ActiveRisk(Base):
     acceptance_date = Column(DateTime(timezone=True), nullable=True)
     review_cycle_days = Column(Integer, default=30)
     status = Column(String(50), default="open")  # open, accepted, mitigating, closed
+    risk_status = Column(String(50), default="Planned")  # Planned, Ongoing, Delayed, Completed, Accepted
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

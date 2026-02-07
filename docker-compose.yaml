@@ -17,6 +17,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - compliance-network
 
   redis:
     image: redis:7-alpine
@@ -30,6 +32,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - compliance-network
 
   backend:
     build:
@@ -44,7 +48,7 @@ services:
       USE_LOCALSTACK: "False"
       USE_SECRETS_MANAGER: "False"
       JWT_SECRET_KEY: dev-secret-key-phase-0-only
-      ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:5173"
+      ALLOWED_ORIGINS: "http://localhost:3000,http://frontend:3000"
     ports:
       - "8000:8000"
     depends_on:
@@ -55,11 +59,37 @@ services:
     volumes:
       - ./backend:/app/backend
     command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - compliance-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_AWS_REGION: ca-west-1
+        NEXT_PUBLIC_USE_MOCK_AUTH: "true"
+        NEXT_PUBLIC_MOCK_TENANT_ID: "67636bd3-9846-4bde-806f-aea369fc9457"
+        NEXT_PUBLIC_MOCK_USER_ID: "0bc9d6a9-f342-452e-9297-ee33f44d4f84"
+    container_name: compliance-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_AWS_REGION: ca-west-1
+      NEXT_PUBLIC_USE_MOCK_AUTH: "true"
+      NEXT_PUBLIC_MOCK_TENANT_ID: "67636bd3-9846-4bde-806f-aea369fc9457"
+      NEXT_PUBLIC_MOCK_USER_ID: "0bc9d6a9-f342-452e-9297-ee33f44d4f84"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - compliance-network
 
 volumes:
   postgres_data:
   redis_data:
 
 networks:
-  default:
-    name: compliance-network
+  compliance-network:
+    driver: bridge

@@ -83,9 +83,11 @@ class AssessmentRead(AssessmentBase):
 class ThreatBase(BaseModel):
     title: str
     description: Optional[str] = None
+    recommendation: Optional[str] = None
     cve_ids: Optional[List[str]] = []
     likelihood: str = "Medium"
     impact: str = "Medium"
+    status: str = "identified"
 
 
 class ThreatCreate(ThreatBase):
@@ -95,9 +97,12 @@ class ThreatCreate(ThreatBase):
 
 
 class ThreatPatch(BaseModel):
+    title: Optional[str] = None
     likelihood: Optional[str] = None
     impact: Optional[str] = None
     description: Optional[str] = None
+    recommendation: Optional[str] = None
+    status: Optional[str] = None
 
 
 class ThreatRead(ThreatBase):
@@ -105,6 +110,7 @@ class ThreatRead(ThreatBase):
     assessment_id: UUID
     catalogue_key: Optional[str] = None
     severity: str
+    status: str
     cvss_score: Optional[str] = None
     detected_by: str
     created_at: datetime
@@ -180,6 +186,7 @@ class ActiveRiskBase(BaseModel):
     title: str
     residual_risk: str = "Medium"
     mitigation_plan: Optional[str] = None
+    risk_status: str = "Planned"
 
 
 class ActiveRiskCreate(ActiveRiskBase):
@@ -192,6 +199,7 @@ class ActiveRiskUpdate(BaseModel):
     residual_risk: Optional[str] = None
     mitigation_plan: Optional[str] = None
     status: Optional[str] = None
+    risk_status: Optional[str] = None
 
 
 class ActiveRiskRead(ActiveRiskBase):

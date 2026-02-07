@@ -51,12 +51,43 @@ def create_app() -> FastAPI:
         """Service health check."""
         return {"status": "healthy", "version": settings.app_version}
     
-    # Include routers (to be added as Phase 0 develops)
-    # from .api import assessments, threats, evidence, auth
-    # app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-    # app.include_router(assessments.router, prefix="/api/v1/assessments", tags=["assessments"])
-    # app.include_router(threats.router, prefix="/api/v1/threats", tags=["threats"])
-    # app.include_router(evidence.router, prefix="/api/v1/evidence", tags=["evidence"])
+    # Include API routers
+    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs
+    
+    app.include_router(
+        assessments.router,
+        prefix="/api/v1/assessments",
+        tags=["assessments"]
+    )
+    app.include_router(
+        threats.router,
+        prefix="/api/v1/threats",
+        tags=["threats"]
+    )
+    app.include_router(
+        evidence.router,
+        prefix="/api/v1/evidence",
+        tags=["evidence"]
+    )
+    app.include_router(
+        recommendations.router,
+        prefix="/api/v1/recommendations",
+        tags=["recommendations"]
+    )
+    app.include_router(
+        active_risks.router,
+        prefix="/api/v1/active-risks",
+        tags=["active-risks"]
+    )
+    app.include_router(
+        audit_logs.router,
+        prefix="/api/v1/audit-logs",
+        tags=["audit-logs"]
+    )
+    
+    # Future routers (Phase 2+)
+    # from .api import threat_catalogue
+    # app.include_router(threat_catalogue.router, prefix="/api/v1/threat-catalogue", tags=["threat-catalogue"])
     
     return app
 
