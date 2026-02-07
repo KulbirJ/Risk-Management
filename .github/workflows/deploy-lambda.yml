@@ -58,6 +58,18 @@ jobs:
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }}
       
+      - name: Run database migrations via Lambda
+        run: |
+          echo "Running database migrations via Lambda..."
+          aws lambda invoke \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --payload '{"action": "run_migrations"}' \
+            --region ${{ env.AWS_REGION }} \
+            migration-response.json
+          
+          cat migration-response.json
+          echo "Migrations completed"
+      
       - name: Create deployment artifact
         run: |
           mkdir -p deployment
