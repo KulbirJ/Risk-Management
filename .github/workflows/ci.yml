@@ -172,5 +172,5 @@ jobs:
           file: ./docker/Dockerfile
           push: false
           tags: compliance-platform-mvp:${{ github.sha }}
-          cache-from: type=registry,ref=compliance-platform-mvp:buildcache
-          cache-to: type=registry,ref=compliance-platform-mvp:buildcache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
