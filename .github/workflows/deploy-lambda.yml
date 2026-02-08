@@ -91,24 +91,10 @@ jobs:
           name: lambda-deployment-info
           path: deployment/lambda-deployment-info.json
       
-      - name: Create GitHub Deployment
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const deployment = await github.rest.repos.createDeployment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: context.sha,
-              environment: 'production',
-              auto_merge: false,
-              production_environment: true,
-              description: 'Deployed to AWS Lambda'
-            });
-            
-            await github.rest.repos.createDeploymentStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              deployment_id: deployment.data.id,
-              state: 'success',
-              description: 'Deployment to Lambda succeeded'
-            });
+      - name: Deployment Summary
+        run: |
+          echo "✅ Lambda deployment completed successfully!"
+          echo "Function: ${{ env.LAMBDA_FUNCTION_NAME }}"
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Deployed at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
