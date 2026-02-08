@@ -58,6 +58,19 @@ jobs:
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }}
       
+      - name: Update Lambda handler configuration
+        run: |
+          echo "Setting Lambda handler to app.main.lambda_handler..."
+          aws lambda update-function-configuration \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --handler app.main.lambda_handler \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "Waiting for configuration update..."
+          aws lambda wait function-updated \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }}
+      
       - name: Run database migrations via Lambda
         run: |
           echo "Running database migrations via Lambda..."
