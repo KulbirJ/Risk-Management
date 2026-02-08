@@ -1,12 +1,15 @@
-name: Deploy to AWS Lambda & Amplify
+name: Deploy to AWS ECS (DISABLED - Using Lambda)
 
-on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
-  workflow_dispatch:
+# This workflow is disabled - we're using deploy-lambda.yml instead
+# To re-enable for ECS deployment, uncomment the 'on:' section below
+
+# on:
+#   push:
+#     branches:
+#       - main
+#     tags:
+#       - 'v*'
+#   workflow_dispatch:
 
 env:
   AWS_REGION: ca-west-1
