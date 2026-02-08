@@ -37,7 +37,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e . --target ./lambda-package
+          # Install dependencies for Linux x86_64 (Lambda runtime platform)
+          pip install --platform manylinux2014_x86_64 --only-binary=:all: --target ./lambda-package -r backend/requirements.txt
+          pip install -e . --target ./lambda-package --no-deps
           cp -r backend/app ./lambda-package/
       
       - name: Create deployment package
@@ -60,10 +62,11 @@ jobs:
       
       - name: Update Lambda handler configuration
         run: |
-          echo "Setting Lambda handler to app.main.lambda_handler..."
+          echo "Setting Lambda handler to app.main.lambda_handler and runtime to python3.11..."
           aws lambda update-function-configuration \
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
             --handler app.main.lambda_handler \
+            --runtime python3.11 \
             --region ${{ env.AWS_REGION }}
           
           echo "Waiting for configuration update..."
