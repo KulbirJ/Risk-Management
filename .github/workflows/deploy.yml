@@ -1,15 +1,15 @@
 name: Deploy to AWS ECS (DISABLED - Using Lambda)
 
 # This workflow is disabled - we're using deploy-lambda.yml instead
-# To re-enable for ECS deployment, uncomment the 'on:' section below
+# It can only be triggered manually if needed in the future
 
-# on:
-#   push:
-#     branches:
-#       - main
-#     tags:
-#       - 'v*'
-#   workflow_dispatch:
+on:
+  workflow_dispatch:
+    inputs:
+      enable:
+        description: 'Type "ENABLE" to run this disabled workflow'
+        required: true
+        default: 'DISABLED'
 
 env:
   AWS_REGION: ca-west-1
@@ -20,6 +20,7 @@ jobs:
   build-and-push:
     name: Build and Push to ECR
     runs-on: ubuntu-latest
+    if: github.event.inputs.enable == 'ENABLE'
     
     steps:
       - name: Checkout code
