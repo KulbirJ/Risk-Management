@@ -6,14 +6,12 @@ frontend:
         - nvm install 20
         - nvm use 20
         - node --version
-        - cd frontend
-        - rm -rf node_modules package-lock.json || true
-        - npm install --package-lock-only
-        - npm ci
+        - cd frontend && rm -rf node_modules package-lock.json || true
+        - cd frontend && npm install --package-lock-only
+        - cd frontend && npm ci
     build:
       commands:
-        - cd frontend
-        - npm run build
+        - cd frontend && npm run build
   artifacts:
     baseDirectory: frontend/.next
     files:
