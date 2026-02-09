@@ -6,20 +6,22 @@ frontend:
         - nvm install 20
         - nvm use 20
         - node --version
+        - cd frontend
         - rm -rf node_modules package-lock.json || true
         - npm install --package-lock-only
         - npm ci
     build:
       commands:
+        - cd frontend
         - npm run build
   artifacts:
-    baseDirectory: .next
+    baseDirectory: frontend/.next
     files:
       - '**/*'
   cache:
     paths:
-      - node_modules/**/*
-      - .next/cache/**/*
+      - frontend/node_modules/**/*
+      - frontend/.next/cache/**/*
   customHeaders:
     - pattern: '**/*'
       headers:
