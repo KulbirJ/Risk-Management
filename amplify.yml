@@ -1,0 +1,40 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - nvm install 20
+        - nvm use 20
+        - node --version
+        - cd frontend
+        - npm ci
+    build:
+      commands:
+        - cd frontend
+        - npm run build
+  artifacts:
+    baseDirectory: frontend/.next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - frontend/node_modules/**/*
+      - frontend/.next/cache/**/*
+  customHeaders:
+    - pattern: '**/*'
+      headers:
+        - key: 'X-Frame-Options'
+          value: 'DENY'
+        - key: 'X-Content-Type-Options'
+          value: 'nosniff'
+        - key: 'X-XSS-Protection'
+          value: '1; mode=block'
+        - key: 'Referrer-Policy'
+          value: 'strict-origin-when-cross-origin'
+        - key: 'Content-Security-Policy'
+          value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://oyxvwg62f7.execute-api.ca-west-1.amazonaws.com"
+environment:
+  variables:
+    NEXT_PUBLIC_API_URL: https://oyxvwg62f7.execute-api.ca-west-1.amazonaws.com
+    NEXT_PUBLIC_AWS_REGION: ca-west-1
+    NEXT_PUBLIC_USE_MOCK_AUTH: "false"

@@ -1,0 +1,133 @@
+name: Deploy to AWS ECS (DISABLED - Using Lambda)
+
+# This workflow is disabled - we're using deploy-lambda.yml instead
+# It can only be triggered manually if needed in the future
+
+on:
+  workflow_dispatch:
+    inputs:
+      enable:
+        description: 'Type "ENABLE" to run this disabled workflow'
+        required: true
+        default: 'DISABLED'
+
+env:
+  AWS_REGION: ca-west-1
+  LAMBDA_FUNCTION_NAME: compliance-platform-api
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  build-and-push:
+    name: Build and Push to ECR
+    runs-on: ubuntu-latest
+    if: github.event.inputs.enable == 'ENABLE'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -f docker/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          
+          # Also tag as 'latest' if on main branch
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          fi
+      
+      - name: Create deployment artifact
+        run: |
+          mkdir -p deployment
+          cat > deployment/image-definitions.json <<EOF
+          [
+            {
+              "name": "compliance-platform-backend",
+              "imageUri": "${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+            }
+          ]
+          EOF
+      
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-definitions
+          path: deployment/image-definitions.json
+
+  deploy-staging:
+    name: Deploy to Staging ECS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Download deployment artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image-definitions
+          path: deployment/
+      
+      # TODO: Create infrastructure/ecs/task-definition-staging.json before enabling
+      # - name: Update ECS task definition
+      #   id: task-def
+      #   uses: aws-actions/amazon-ecs-render-task-definition@v1
+      #   with:
+      #     task-definition: infrastructure/ecs/task-definition-staging.json
+      #     container-name: compliance-platform-backend
+      #     image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+      
+      # - name: Deploy to ECS
+      #   uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      #   with:
+      #     task-definition: ${{ steps.task-def.outputs.task-definition }}
+      #     service: compliance-platform-staging
+      #     cluster: compliance-platform-staging
+      #     wait-for-service-stability: true
+      
+      - name: Create GitHub Deployment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'staging',
+              auto_merge: false,
+              production_environment: false,
+              description: 'Deployed to staging ECS'
+            });
+            
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: 'success',
+              environment_url: 'https://staging-api.compliance-platform.internal',
+              description: 'Deployment to staging succeeded'
+            });

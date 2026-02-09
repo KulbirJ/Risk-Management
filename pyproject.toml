@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["backend"]
+
+[project]
+name = "compliance-platform-mvp"
+version = "0.1.0"
+description = "Cybersecurity Risk Assessment Compliance Platform - Phase 0 MVP"
+requires-python = ">=3.11"
+authors = [{name = "Development Team", email = "dev@compliance-platform.local"}]
+
+dependencies = [
+    "fastapi==0.109.0",
+    "uvicorn[standard]==0.27.0",
+    "sqlalchemy==2.0.23",
+    "alembic==1.13.0",
+    "pydantic[email]==2.5.0",
+    "pydantic-settings==2.1.0",
+    "python-dotenv==1.0.0",
+    "boto3==1.34.0",
+    "python-jose[cryptography]==3.3.0",
+    "python-multipart==0.0.6",
+    "httpx==0.25.0",
+    "psycopg2-binary==2.9.9",
+    "PyJWT==2.11.0",
+    "requests==2.31.0",
+    "pytz==2023.3",
+    "mangum==0.17.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==7.4.3",
+    "pytest-asyncio==0.21.1",
+    "pytest-cov==4.1.0",
+    "moto[s3,secretsmanager,kms]==4.2.0",
+    "black==23.12.0",
+    "ruff==0.1.8",
+    "mypy==1.7.0",
+    "isort==5.13.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+asyncio_mode = "auto"
+addopts = "-v --cov=backend/app --cov-report=term-missing"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
