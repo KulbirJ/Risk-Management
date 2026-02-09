@@ -1,26 +1,26 @@
-name: Build & Push to ECR
+name: Deploy to AWS ECS (DISABLED - Using Lambda)
+
+# This workflow is disabled - we're using deploy-lambda.yml instead
+# It can only be triggered manually if needed in the future
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
   workflow_dispatch:
+    inputs:
+      enable:
+        description: 'Type "ENABLE" to run this disabled workflow'
+        required: true
+        default: 'DISABLED'
 
 env:
-  AWS_REGION: ca-central-1
-  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ca-central-1.amazonaws.com
-  ECR_REPOSITORY: compliance-platform-mvp
+  AWS_REGION: ca-west-1
+  LAMBDA_FUNCTION_NAME: compliance-platform-api
+  PYTHON_VERSION: '3.11'
 
 jobs:
   build-and-push:
     name: Build and Push to ECR
     runs-on: ubuntu-latest
-    
-    permissions:
-      id-token: write
-      contents: read
+    if: github.event.inputs.enable == 'ENABLE'
     
     steps:
       - name: Checkout code
@@ -29,7 +29,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-role
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
       
       - name: Login to Amazon ECR
@@ -63,7 +64,7 @@ jobs:
           EOF
       
       - name: Upload deployment artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: image-definitions
           path: deployment/image-definitions.json
@@ -74,10 +75,6 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
-    permissions:
-      id-token: write
-      contents: read
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -85,30 +82,32 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-role
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
       
       - name: Download deployment artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: image-definitions
           path: deployment/
       
-      - name: Update ECS task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: infrastructure/ecs/task-definition-staging.json
-          container-name: compliance-platform-backend
-          image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+      # TODO: Create infrastructure/ecs/task-definition-staging.json before enabling
+      # - name: Update ECS task definition
+      #   id: task-def
+      #   uses: aws-actions/amazon-ecs-render-task-definition@v1
+      #   with:
+      #     task-definition: infrastructure/ecs/task-definition-staging.json
+      #     container-name: compliance-platform-backend
+      #     image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
       
-      - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: compliance-platform-staging
-          cluster: compliance-platform-staging
-          wait-for-service-stability: true
+      # - name: Deploy to ECS
+      #   uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      #   with:
+      #     task-definition: ${{ steps.task-def.outputs.task-definition }}
+      #     service: compliance-platform-staging
+      #     cluster: compliance-platform-staging
+      #     wait-for-service-stability: true
       
       - name: Create GitHub Deployment
         uses: actions/github-script@v6
