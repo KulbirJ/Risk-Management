@@ -51,6 +51,59 @@ def create_app() -> FastAPI:
         """Service health check."""
         return {"status": "healthy", "version": settings.app_version}
     
+    # Seed endpoint for database initialization
+    @app.post("/seed")
+    async def seed_database():
+        """Seed database with test tenant and user."""
+        from sqlalchemy.orm import Session
+        from .db.database import SessionLocal
+        from .models.tenant import Tenant
+        from .models.user import User
+        import uuid
+        
+        db: Session = SessionLocal()
+        try:
+            tenant_id = uuid.UUID("67636bd3-9846-4bde-806f-aea369fc9457")
+            user_id = uuid.UUID("0bc9d6a9-f342-452e-9297-ee33f44d4f84")
+            results = []
+            
+            # Check/create tenant
+            existing_tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+            if not existing_tenant:
+                tenant = Tenant(
+                    id=tenant_id,
+                    name="Test Organization",
+                    contact_email="admin@testorg.com"
+                )
+                db.add(tenant)
+                db.commit()
+                results.append("Created test tenant")
+            else:
+                results.append("Test tenant already exists")
+            
+            # Check/create user
+            existing_user = db.query(User).filter(User.id == user_id).first()
+            if not existing_user:
+                user = User(
+                    id=user_id,
+                    tenant_id=tenant_id,
+                    email="testuser@testorg.com",
+                    name="Test User",
+                    role="admin"
+                )
+                db.add(user)
+                db.commit()
+                results.append("Created test user")
+            else:
+                results.append("Test user already exists")
+            
+            return {"status": "success", "results": results}
+        except Exception as e:
+            db.rollback()
+            return {"status": "error", "message": str(e)}
+        finally:
+            db.close()
+    
     # Include API routers
     from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs
     
