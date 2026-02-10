@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     localstack_endpoint_url: Optional[str] = None
 
     # CORS
-    allowed_origins: str = "http://localhost:3000,http://localhost:5173"
+    allowed_origins: str = "http://localhost:3000,http://localhost:5173,https://main.d2kda7m9vuv8zf.amplifyapp.com,https://main.d2qj9v0aax9a6c.amplifyapp.com"
     
     @field_validator("allowed_origins", mode="before")
     @classmethod
