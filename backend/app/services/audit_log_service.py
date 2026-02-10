@@ -31,12 +31,14 @@ class AuditLogService:
         audit_log = AuditLog(
             tenant_id=tenant_id,
             actor_user_id=actor_user_id,
-            action=action,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            old_value=old_value or {},
-            new_value=new_value or {},
-            metadata=metadata or {}
+            action_type=action,
+            resource_type=entity_type,
+            resource_id=str(entity_id),
+            changes={
+                "before": old_value or {},
+                "after": new_value or {},
+                "metadata": metadata or {}
+            }
         )
         
         try:
@@ -77,24 +79,24 @@ class AuditLogService:
         query = db.query(AuditLog).filter(AuditLog.tenant_id == tenant_id)
         
         if entity_type:
-            query = query.filter(AuditLog.entity_type == entity_type)
+            query = query.filter(AuditLog.resource_type == entity_type)
         
         if entity_id:
-            query = query.filter(AuditLog.entity_id == entity_id)
+            query = query.filter(AuditLog.resource_id == str(entity_id))
         
         if actor_user_id:
             query = query.filter(AuditLog.actor_user_id == actor_user_id)
         
         if action:
-            query = query.filter(AuditLog.action == action)
+            query = query.filter(AuditLog.action_type == action)
         
         if start_date:
-            query = query.filter(AuditLog.timestamp >= start_date)
+            query = query.filter(AuditLog.created_at >= start_date)
         
         if end_date:
-            query = query.filter(AuditLog.timestamp <= end_date)
+            query = query.filter(AuditLog.created_at <= end_date)
         
-        return query.order_by(AuditLog.timestamp.desc()).offset(skip).limit(limit).all()
+        return query.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit).all()
 
     @staticmethod
     def get_entity_history(
@@ -107,9 +109,9 @@ class AuditLogService:
         """Get complete change history for a specific entity."""
         return db.query(AuditLog).filter(
             AuditLog.tenant_id == tenant_id,
-            AuditLog.entity_type == entity_type,
-            AuditLog.entity_id == entity_id
-        ).order_by(AuditLog.timestamp.desc()).limit(limit).all()
+            AuditLog.resource_type == entity_type,
+            AuditLog.resource_id == str(entity_id)
+        ).order_by(AuditLog.created_at.desc()).limit(limit).all()
 
     @staticmethod
     def get_audit_count(
@@ -122,9 +124,9 @@ class AuditLogService:
         query = db.query(AuditLog).filter(AuditLog.tenant_id == tenant_id)
         
         if entity_type:
-            query = query.filter(AuditLog.entity_type == entity_type)
+            query = query.filter(AuditLog.resource_type == entity_type)
         
         if action:
-            query = query.filter(AuditLog.action == action)
+            query = query.filter(AuditLog.action_type == action)
         
         return query.count()

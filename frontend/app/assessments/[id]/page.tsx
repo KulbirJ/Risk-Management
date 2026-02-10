@@ -10,7 +10,7 @@ import { Alert } from '@/components/Alert';
 import { StatusBadge, SeverityBadge } from '@/components/Badge';
 import { ThreatModal, ThreatFormData } from '@/components/ThreatModal';
 import apiClient from '@/lib/api-client';
-import { Assessment, Threat } from '@/lib/types';
+import { Assessment, Threat, ActiveRisk } from '@/lib/types';
 import { format } from 'date-fns';
 
 export default function AssessmentDetailPage() {
@@ -39,8 +39,8 @@ export default function AssessmentDetailPage() {
         apiClient.getThreats(assessmentId),
       ]);
 
-      setAssessment(assessmentData as Assessment);
-      setThreats(threatsData as Threat[]);
+      setAssessment(assessmentData);
+      setThreats(threatsData);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load assessment');
     } finally {
@@ -103,14 +103,14 @@ export default function AssessmentDetailPage() {
         // If status changed to 'at_risk', create an active risk entry
         if (formData.status === 'at_risk' && editingThreat.status !== 'at_risk') {
           // Create risk register entry
-          const activeRiskPayload = {
+          const activeRiskPayload: Partial<ActiveRisk> = {
             threat_id: editingThreat.id,
             title: formData.title,
-            residual_risk: formData.impact, // Use impact as default residual risk
+            residual_risk: formData.impact as 'Low' | 'Medium' | 'High' | 'Critical',
             risk_owner_id: assessment?.owner_user_id || '',
             mitigation_plan: formData.description || '',
             review_cycle_days: 30,
-            risk_status: 'Planned', // Default risk status
+            risk_status: 'Planned',
           };
 
           await apiClient.createActiveRisk(assessmentId, activeRiskPayload);

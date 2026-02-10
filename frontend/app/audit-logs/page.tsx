@@ -32,8 +32,8 @@ export default function AuditLogsPage() {
       if (entityTypeFilter !== 'all') {
         params.resource_type = entityTypeFilter;
       }
-      const data = await apiClient.getAuditLogs(params);
-      setLogs(data as AuditLog[]);
+      const items = await apiClient.getAuditLogs(params);
+      setLogs(items);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load audit logs');
     } finally {
@@ -160,7 +160,7 @@ export default function AuditLogsPage() {
                     {log.resource_id.substring(0, 8)}...
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {log.actor?.email || log.actor_user_id?.substring(0, 8) || 'System'}
+                    {log.actor_user_id?.substring(0, 8) || 'System'}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {log.changes && (

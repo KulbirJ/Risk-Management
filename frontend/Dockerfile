@@ -1,13 +1,13 @@
 # Stage 1: Build
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install
 
 # Copy source code
 COPY . .
@@ -29,7 +29,7 @@ ENV NEXT_PUBLIC_MOCK_USER_ID=$NEXT_PUBLIC_MOCK_USER_ID
 RUN npm run build
 
 # Stage 2: Production
-FROM node:18-alpine AS runner
+FROM node:20-alpine AS runner
 
 WORKDIR /app
 

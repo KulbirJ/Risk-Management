@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
 import apiClient from '@/lib/api-client';
+import { Assessment } from '@/lib/types';
 
 export default function NewAssessmentPage() {
   const router = useRouter();
@@ -30,13 +31,13 @@ export default function NewAssessmentPage() {
 
       const mockUserId = process.env.NEXT_PUBLIC_MOCK_USER_ID || '';
       
-      const payload = {
+      const payload: Partial<Assessment> = {
         title: formData.title,
         description: formData.description || undefined,
         system_background: formData.system_background || undefined,
         scope: formData.scope || undefined,
         tech_stack: formData.tech_stack ? formData.tech_stack.split(',').map(t => t.trim()).filter(t => t) : [],
-        overall_impact: formData.overall_impact,
+        overall_impact: formData.overall_impact as 'Low' | 'Medium' | 'High' | 'Critical',
         owner_user_id: mockUserId,
       };
 

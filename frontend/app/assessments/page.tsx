@@ -30,8 +30,8 @@ export default function AssessmentsPage() {
       if (statusFilter !== 'all') {
         params.status = statusFilter;
       }
-      const data = await apiClient.getAssessments(params);
-      setAssessments(data as Assessment[]);
+      const items = await apiClient.getAssessments(params);
+      setAssessments(items);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load assessments');
     } finally {

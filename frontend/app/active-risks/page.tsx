@@ -32,8 +32,8 @@ export default function ActiveRisksPage() {
       if (statusFilter !== 'all') {
         params.status = statusFilter;
       }
-      const data = await apiClient.getActiveRisks(params);
-      setRisks(data as ActiveRisk[]);
+      const items = await apiClient.getActiveRisks(params);
+      setRisks(items);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load active risks');
     } finally {

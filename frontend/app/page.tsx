@@ -37,8 +37,8 @@ export default function DashboardPage() {
         apiClient.getActiveRisks({ status: 'open' }),
       ]);
 
-      const assessments = assessmentsResponse as Assessment[];
-      const risks = risksResponse as ActiveRisk[];
+      const assessments = assessmentsResponse;
+      const risks = risksResponse;
 
       setStats({
         totalAssessments: assessments.length,
