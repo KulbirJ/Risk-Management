@@ -36,13 +36,14 @@ def create_app() -> FastAPI:
         debug=settings.debug,
     )
     
-    # Add CORS middleware
+    # Add CORS middleware with explicit wildcard for all origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.get_origins,
-        allow_credentials=True,
+        allow_origins=["*"],  # Allow all origins for testing
+        allow_credentials=False,  # Must be False when using wildcard
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["*"],
     )
     
     # Health check endpoint
