@@ -1,26 +1,23 @@
 version: 1
 frontend:
+  appRoot: frontend
   phases:
     preBuild:
       commands:
-        - nvm install 20
-        - nvm use 20
-        - node --version
-        - cd frontend
-        - rm -rf node_modules package-lock.json || true
-        - npm install --package-lock-only
-        - npm ci
+        - npm install
     build:
       commands:
         - npm run build
   artifacts:
-    baseDirectory: frontend/.next
+    baseDirectory: .next
     files:
       - '**/*'
   cache:
     paths:
-      - frontend/node_modules/**/*
-      - frontend/.next/cache/**/*
+      - node_modules/**/*
+      - .next/cache/**/*
+  buildSettings:
+    framework: nextjs
   customHeaders:
     - pattern: '**/*'
       headers:
