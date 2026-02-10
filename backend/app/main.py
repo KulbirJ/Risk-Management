@@ -102,28 +102,94 @@ def create_app() -> FastAPI:
         finally:
             db.close()
     
-    # Database migration endpoint to add missing columns
+    # Database migration endpoint - comprehensive schema sync
     @app.post("/migrate-schema")
     async def migrate_schema():
-        """Add missing columns to database schema."""
-        from sqlalchemy import text
-        from .db.database import SessionLocal
+        """Sync database schema with models - creates tables and adds missing columns."""
+        from sqlalchemy import text, inspect
+        from .db.database import SessionLocal, engine, Base
+        from .models.models import (
+            Tenant, User, Assessment, Threat, Evidence,
+            Recommendation, ActiveRisk, AuditLog, ThreatCatalogue
+        )
         
         db = SessionLocal()
         results = []
         try:
-            # Add risk_status column to active_risks if it doesn't exist
-            db.execute(text("""
-                ALTER TABLE active_risks 
-                ADD COLUMN IF NOT EXISTS risk_status VARCHAR(50) DEFAULT 'Planned'
-            """))
+            # First, create all tables that don't exist
+            Base.metadata.create_all(bind=engine)
+            results.append("Created any missing tables")
+            
+            # Get inspector to check existing columns
+            inspector = inspect(engine)
+            
+            # Define all columns that should exist per table
+            schema_updates = [
+                # active_risks table
+                ("active_risks", "risk_status", "VARCHAR(50) DEFAULT 'Planned'"),
+                ("active_risks", "status", "VARCHAR(50) DEFAULT 'open'"),
+                ("active_risks", "mitigation_plan", "TEXT"),
+                ("active_risks", "acceptance_date", "TIMESTAMP WITH TIME ZONE"),
+                ("active_risks", "review_cycle_days", "INTEGER DEFAULT 30"),
+                
+                # threats table
+                ("threats", "likelihood_score", "INTEGER DEFAULT 0"),
+                ("threats", "ai_rationale", "TEXT"),
+                ("threats", "cve_ids", "JSONB DEFAULT '[]'"),
+                ("threats", "cvss_score", "VARCHAR(10)"),
+                
+                # assessments table
+                ("assessments", "system_background", "TEXT"),
+                ("assessments", "scope", "TEXT"),
+                ("assessments", "tech_stack", "JSONB DEFAULT '[]'"),
+                ("assessments", "overall_impact", "VARCHAR(20) DEFAULT 'Medium'"),
+                
+                # users table
+                ("users", "cognito_sub", "VARCHAR(255)"),
+                ("users", "roles", "JSONB DEFAULT '[\"viewer\"]'"),
+                ("users", "is_active", "BOOLEAN DEFAULT TRUE"),
+                ("users", "last_login", "TIMESTAMP WITH TIME ZONE"),
+                
+                # tenants table
+                ("tenants", "region", "VARCHAR(50) DEFAULT 'ca-west-1'"),
+                ("tenants", "settings", "JSONB DEFAULT '{}'"),
+                
+                # recommendations table
+                ("recommendations", "confidence_score", "INTEGER DEFAULT 0"),
+                ("recommendations", "target_date", "TIMESTAMP WITH TIME ZONE"),
+                
+                # evidence table
+                ("evidence", "mime_type", "VARCHAR(100)"),
+                ("evidence", "file_size_bytes", "BIGINT"),
+                ("evidence", "storage_path", "VARCHAR(512)"),
+                
+                # audit_logs table
+                ("audit_logs", "ip_address", "VARCHAR(50)"),
+                ("audit_logs", "user_agent", "VARCHAR(512)"),
+            ]
+            
+            for table_name, column_name, column_def in schema_updates:
+                try:
+                    # Check if table exists
+                    if table_name in inspector.get_table_names():
+                        existing_columns = [col['name'] for col in inspector.get_columns(table_name)]
+                        if column_name not in existing_columns:
+                            db.execute(text(f"""
+                                ALTER TABLE {table_name} 
+                                ADD COLUMN IF NOT EXISTS {column_name} {column_def}
+                            """))
+                            results.append(f"Added {table_name}.{column_name}")
+                except Exception as col_error:
+                    results.append(f"Note: {table_name}.{column_name} - {str(col_error)[:50]}")
+            
             db.commit()
-            results.append("Added risk_status column to active_risks (if missing)")
+            results.append("Schema sync completed")
             
             return {"status": "success", "results": results}
         except Exception as e:
             db.rollback()
-            return {"status": "error", "message": str(e)}
+            import traceback
+            return {"status": "error", "message": str(e), "trace": traceback.format_exc()}
         finally:
             db.close()
     
