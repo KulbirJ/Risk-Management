@@ -5,10 +5,9 @@ frontend:
       commands:
         - nvm install 20
         - nvm use 20
-        - npm ci
+        - cd frontend && npm install
     build:
       commands:
-        - env | grep -i NEXT || true
         - npm run build
   artifacts:
     baseDirectory: .next
