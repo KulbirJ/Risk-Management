@@ -57,8 +57,7 @@ def create_app() -> FastAPI:
         """Seed database with test tenant and user."""
         from sqlalchemy.orm import Session
         from .db.database import SessionLocal
-        from .models.tenant import Tenant
-        from .models.user import User
+        from .models.models import Tenant, User
         import uuid
         
         db: Session = SessionLocal()
@@ -72,8 +71,7 @@ def create_app() -> FastAPI:
             if not existing_tenant:
                 tenant = Tenant(
                     id=tenant_id,
-                    name="Test Organization",
-                    contact_email="admin@testorg.com"
+                    name="Test Organization"
                 )
                 db.add(tenant)
                 db.commit()
@@ -88,8 +86,8 @@ def create_app() -> FastAPI:
                     id=user_id,
                     tenant_id=tenant_id,
                     email="testuser@testorg.com",
-                    name="Test User",
-                    role="admin"
+                    display_name="Test User",
+                    roles=["admin"]
                 )
                 db.add(user)
                 db.commit()
