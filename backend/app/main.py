@@ -102,6 +102,31 @@ def create_app() -> FastAPI:
         finally:
             db.close()
     
+    # Database migration endpoint to add missing columns
+    @app.post("/migrate-schema")
+    async def migrate_schema():
+        """Add missing columns to database schema."""
+        from sqlalchemy import text
+        from .db.database import SessionLocal
+        
+        db = SessionLocal()
+        results = []
+        try:
+            # Add risk_status column to active_risks if it doesn't exist
+            db.execute(text("""
+                ALTER TABLE active_risks 
+                ADD COLUMN IF NOT EXISTS risk_status VARCHAR(50) DEFAULT 'Planned'
+            """))
+            db.commit()
+            results.append("Added risk_status column to active_risks (if missing)")
+            
+            return {"status": "success", "results": results}
+        except Exception as e:
+            db.rollback()
+            return {"status": "error", "message": str(e)}
+        finally:
+            db.close()
+    
     # Include API routers
     from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs
     
