@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './Button';
-import { Threat } from '@/lib/types';
+import { Threat } from '../lib/types';
 
 interface ThreatModalProps {
   isOpen: boolean;

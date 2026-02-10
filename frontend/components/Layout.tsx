@@ -13,7 +13,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
-import { isCognitoEnabled } from '@/lib/amplify-config';
+import { isCognitoEnabled } from '../lib/amplify-config';
 
 interface LayoutProps {
   children: ReactNode;

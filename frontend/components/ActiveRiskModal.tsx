@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './Button';
-import { ActiveRisk } from '@/lib/types';
+import { ActiveRisk } from '../lib/types';
 
 interface ActiveRiskModalProps {
   isOpen: boolean;

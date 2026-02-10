@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { Search, Filter } from 'lucide-react';
-import { LoadingPage } from '@/components/LoadingSpinner';
-import { Alert } from '@/components/Alert';
-import { StatusBadge, SeverityBadge } from '@/components/Badge';
-import { Button } from '@/components/Button';
-import ActiveRiskModal, { ActiveRiskFormData } from '@/components/ActiveRiskModal';
-import apiClient from '@/lib/api-client';
-import { ActiveRisk } from '@/lib/types';
+import { LoadingPage } from '../../components/LoadingSpinner';
+import { Alert } from '../../components/Alert';
+import { StatusBadge, SeverityBadge } from '../../components/Badge';
+import { Button } from '../../components/Button';
+import ActiveRiskModal, { ActiveRiskFormData } from '../../components/ActiveRiskModal';
+import apiClient from '../../lib/api-client';
+import { ActiveRisk } from '../../lib/types';
 import { format } from 'date-fns';
 
 export default function ActiveRisksPage() {

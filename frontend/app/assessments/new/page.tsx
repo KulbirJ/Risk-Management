@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { Button } from '@/components/Button';
-import { Alert } from '@/components/Alert';
-import apiClient from '@/lib/api-client';
-import { Assessment } from '@/lib/types';
+import { Button } from '../../../components/Button';
+import { Alert } from '../../../components/Alert';
+import apiClient from '../../../lib/api-client';
+import { Assessment } from '../../../lib/types';
 
 export default function NewAssessmentPage() {
   const router = useRouter();

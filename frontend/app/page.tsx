@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { FileText, AlertTriangle, Shield, TrendingUp, Plus } from 'lucide-react';
-import { Button } from '@/components/Button';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
-import { Alert } from '@/components/Alert';
-import apiClient from '@/lib/api-client';
-import { Assessment, ActiveRisk } from '@/lib/types';
-import { StatusBadge } from '@/components/Badge';
+import { Button } from '../components/Button';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+import { Alert } from '../components/Alert';
+import apiClient from '../lib/api-client';
+import { Assessment, ActiveRisk } from '../lib/types';
+import { StatusBadge } from '../components/Badge';
 import { format } from 'date-fns';
 
 export default function DashboardPage() {

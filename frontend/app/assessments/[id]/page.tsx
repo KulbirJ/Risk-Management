@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/Button';
-import { LoadingPage } from '@/components/LoadingSpinner';
-import { Alert } from '@/components/Alert';
-import { StatusBadge, SeverityBadge } from '@/components/Badge';
-import { ThreatModal, ThreatFormData } from '@/components/ThreatModal';
-import apiClient from '@/lib/api-client';
-import { Assessment, Threat, ActiveRisk } from '@/lib/types';
+import { Button } from '../../../components/Button';
+import { LoadingPage } from '../../../components/LoadingSpinner';
+import { Alert } from '../../../components/Alert';
+import { StatusBadge, SeverityBadge } from '../../../components/Badge';
+import { ThreatModal, ThreatFormData } from '../../../components/ThreatModal';
+import apiClient from '../../../lib/api-client';
+import { Assessment, Threat, ActiveRisk } from '../../../lib/types';
 import { format } from 'date-fns';
 
 export default function AssessmentDetailPage() {

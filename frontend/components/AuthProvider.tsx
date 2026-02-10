@@ -4,7 +4,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Authenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
-import { isCognitoEnabled } from '@/lib/amplify-config';
+import { isCognitoEnabled } from '../lib/amplify-config';
 
 interface AuthProviderProps {
   children: ReactNode;

@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { Search, Filter } from 'lucide-react';
-import { LoadingPage } from '@/components/LoadingSpinner';
-import { Alert } from '@/components/Alert';
-import { Badge } from '@/components/Badge';
-import apiClient from '@/lib/api-client';
-import { AuditLog } from '@/lib/types';
+import { LoadingPage } from '../../components/LoadingSpinner';
+import { Alert } from '../../components/Alert';
+import { Badge } from '../../components/Badge';
+import apiClient from '../../lib/api-client';
+import { AuditLog } from '../../lib/types';
 import { format } from 'date-fns';
 
 export default function AuditLogsPage() {

@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Plus, Search } from 'lucide-react';
-import { Button } from '@/components/Button';
-import { LoadingPage } from '@/components/LoadingSpinner';
-import { Alert } from '@/components/Alert';
-import { StatusBadge } from '@/components/Badge';
-import apiClient from '@/lib/api-client';
-import { Assessment } from '@/lib/types';
+import { Button } from '../../components/Button';
+import { LoadingPage } from '../../components/LoadingSpinner';
+import { Alert } from '../../components/Alert';
+import { StatusBadge } from '../../components/Badge';
+import apiClient from '../../lib/api-client';
+import { Assessment } from '../../lib/types';
 import { format } from 'date-fns';
 
 export default function AssessmentsPage() {
