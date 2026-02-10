@@ -10,6 +10,10 @@ applications:
             - npm ci
         build:
           commands:
+            - export NEXT_PUBLIC_API_URL=https://oyxvwg62f7.execute-api.ca-west-1.amazonaws.com
+            - export NEXT_PUBLIC_AWS_REGION=ca-west-1
+            - export NEXT_PUBLIC_USE_MOCK_AUTH=false
+            - echo "Building with API URL: $NEXT_PUBLIC_API_URL"
             - npm run build
       artifacts:
         baseDirectory: .next
@@ -21,8 +25,3 @@ applications:
           - .next/cache/**/*
       buildSettings:
         framework: nextjs
-    environment:
-      variables:
-        NEXT_PUBLIC_API_URL: https://oyxvwg62f7.execute-api.ca-west-1.amazonaws.com
-        NEXT_PUBLIC_AWS_REGION: ca-west-1
-        NEXT_PUBLIC_USE_MOCK_AUTH: "false"
