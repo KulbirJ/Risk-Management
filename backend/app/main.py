@@ -124,49 +124,101 @@ def create_app() -> FastAPI:
             # Get inspector to check existing columns
             inspector = inspect(engine)
             
-            # Define all columns that should exist per table
+            # Define all columns that should exist per table (comprehensive list from models.py)
             schema_updates = [
-                # active_risks table
-                ("active_risks", "risk_status", "VARCHAR(50) DEFAULT 'Planned'"),
-                ("active_risks", "status", "VARCHAR(50) DEFAULT 'open'"),
-                ("active_risks", "mitigation_plan", "TEXT"),
-                ("active_risks", "acceptance_date", "TIMESTAMP WITH TIME ZONE"),
-                ("active_risks", "review_cycle_days", "INTEGER DEFAULT 30"),
+                # ============ TENANTS TABLE ============
+                ("tenants", "name", "VARCHAR(255)"),
+                ("tenants", "region", "VARCHAR(50) DEFAULT 'ca-west-1'"),
+                ("tenants", "settings", "JSONB DEFAULT '{}'"),
+                ("tenants", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 
-                # threats table
-                ("threats", "likelihood_score", "INTEGER DEFAULT 0"),
-                ("threats", "ai_rationale", "TEXT"),
-                ("threats", "cve_ids", "JSONB DEFAULT '[]'"),
-                ("threats", "cvss_score", "VARCHAR(10)"),
+                # ============ USERS TABLE ============
+                ("users", "email", "VARCHAR(255)"),
+                ("users", "display_name", "VARCHAR(255)"),
+                ("users", "cognito_sub", "VARCHAR(255)"),
+                ("users", "roles", "JSONB DEFAULT '[\"viewer\"]'"),
+                ("users", "is_active", "BOOLEAN DEFAULT TRUE"),
+                ("users", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                ("users", "last_login", "TIMESTAMP WITH TIME ZONE"),
                 
-                # assessments table
+                # ============ ASSESSMENTS TABLE ============
+                ("assessments", "title", "VARCHAR(255)"),
+                ("assessments", "description", "TEXT"),
                 ("assessments", "system_background", "TEXT"),
                 ("assessments", "scope", "TEXT"),
                 ("assessments", "tech_stack", "JSONB DEFAULT '[]'"),
                 ("assessments", "overall_impact", "VARCHAR(20) DEFAULT 'Medium'"),
+                ("assessments", "status", "VARCHAR(20) DEFAULT 'draft'"),
+                ("assessments", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                ("assessments", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 
-                # users table
-                ("users", "cognito_sub", "VARCHAR(255)"),
-                ("users", "roles", "JSONB DEFAULT '[\"viewer\"]'"),
-                ("users", "is_active", "BOOLEAN DEFAULT TRUE"),
-                ("users", "last_login", "TIMESTAMP WITH TIME ZONE"),
+                # ============ THREATS TABLE ============
+                ("threats", "catalogue_key", "VARCHAR(255)"),
+                ("threats", "title", "VARCHAR(255)"),
+                ("threats", "description", "TEXT"),
+                ("threats", "recommendation", "TEXT"),
+                ("threats", "detected_by", "VARCHAR(50) DEFAULT 'manual'"),
+                ("threats", "cve_ids", "JSONB DEFAULT '[]'"),
+                ("threats", "cvss_score", "VARCHAR(10)"),
+                ("threats", "likelihood", "VARCHAR(20) DEFAULT 'Medium'"),
+                ("threats", "likelihood_score", "INTEGER DEFAULT 0"),
+                ("threats", "impact", "VARCHAR(20) DEFAULT 'Medium'"),
+                ("threats", "severity", "VARCHAR(20) DEFAULT 'Medium'"),
+                ("threats", "status", "VARCHAR(20) DEFAULT 'identified'"),
+                ("threats", "ai_rationale", "TEXT"),
+                ("threats", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                ("threats", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 
-                # tenants table
-                ("tenants", "region", "VARCHAR(50) DEFAULT 'ca-west-1'"),
-                ("tenants", "settings", "JSONB DEFAULT '{}'"),
-                
-                # recommendations table
-                ("recommendations", "confidence_score", "INTEGER DEFAULT 0"),
-                ("recommendations", "target_date", "TIMESTAMP WITH TIME ZONE"),
-                
-                # evidence table
+                # ============ EVIDENCE TABLE ============
+                ("evidence", "s3_key", "VARCHAR(512)"),
+                ("evidence", "file_name", "VARCHAR(255)"),
                 ("evidence", "mime_type", "VARCHAR(100)"),
-                ("evidence", "file_size_bytes", "BIGINT"),
-                ("evidence", "storage_path", "VARCHAR(512)"),
+                ("evidence", "size_bytes", "INTEGER"),
+                ("evidence", "status", "VARCHAR(50) DEFAULT 'ready'"),
+                ("evidence", "extracted_text", "TEXT"),
+                ("evidence", "extract_metadata", "JSONB"),
+                ("evidence", "quality", "VARCHAR(20) DEFAULT 'medium'"),
+                ("evidence", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 
-                # audit_logs table
+                # ============ RECOMMENDATIONS TABLE ============
+                ("recommendations", "text", "TEXT"),
+                ("recommendations", "type", "VARCHAR(50) DEFAULT 'remediation'"),
+                ("recommendations", "priority", "VARCHAR(20) DEFAULT 'Medium'"),
+                ("recommendations", "status", "VARCHAR(50) DEFAULT 'open'"),
+                ("recommendations", "target_date", "TIMESTAMP WITH TIME ZONE"),
+                ("recommendations", "confidence_score", "INTEGER DEFAULT 0"),
+                ("recommendations", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                ("recommendations", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ ACTIVE_RISKS TABLE ============
+                ("active_risks", "title", "VARCHAR(255)"),
+                ("active_risks", "residual_risk", "VARCHAR(20) DEFAULT 'Medium'"),
+                ("active_risks", "mitigation_plan", "TEXT"),
+                ("active_risks", "acceptance_date", "TIMESTAMP WITH TIME ZONE"),
+                ("active_risks", "review_cycle_days", "INTEGER DEFAULT 30"),
+                ("active_risks", "status", "VARCHAR(50) DEFAULT 'open'"),
+                ("active_risks", "risk_status", "VARCHAR(50) DEFAULT 'Planned'"),
+                ("active_risks", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                ("active_risks", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ AUDIT_LOGS TABLE ============
+                ("audit_logs", "action_type", "VARCHAR(255)"),
+                ("audit_logs", "resource_type", "VARCHAR(100)"),
+                ("audit_logs", "resource_id", "VARCHAR(255)"),
+                ("audit_logs", "changes", "JSONB"),
                 ("audit_logs", "ip_address", "VARCHAR(50)"),
                 ("audit_logs", "user_agent", "VARCHAR(512)"),
+                ("audit_logs", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ THREAT_CATALOGUE TABLE ============
+                ("threat_catalogue", "catalogue_key", "VARCHAR(255)"),
+                ("threat_catalogue", "title", "VARCHAR(255)"),
+                ("threat_catalogue", "description", "TEXT"),
+                ("threat_catalogue", "default_likelihood", "VARCHAR(20) DEFAULT 'Medium'"),
+                ("threat_catalogue", "default_impact", "VARCHAR(20) DEFAULT 'Medium'"),
+                ("threat_catalogue", "mitigations", "JSONB DEFAULT '[]'"),
+                ("threat_catalogue", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                ("threat_catalogue", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
             ]
             
             for table_name, column_name, column_def in schema_updates:
