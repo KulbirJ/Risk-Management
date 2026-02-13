@@ -332,7 +332,7 @@ Return valid JSON object."""
                 status="open",
                 detected_by="ai_intelligence",
                 ai_rationale=risk_data.get('justification', ''),
-                metadata={
+                extra_data={
                     "vulnerability": vulnerability,
                     "ai_generated": True,
                     "model": settings.bedrock_model_id

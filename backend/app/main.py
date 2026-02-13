@@ -209,7 +209,7 @@ def create_app() -> FastAPI:
                 ("active_risks", "risk_status", "VARCHAR(50) DEFAULT 'Planned'"),
                 ("active_risks", "detected_by", "VARCHAR(50) DEFAULT 'manual'"),
                 ("active_risks", "ai_rationale", "TEXT"),
-                ("active_risks", "metadata", "JSONB DEFAULT '{}'"),
+                ("active_risks", "extra_data", "JSONB DEFAULT '{}'"),
                 ("active_risks", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 ("active_risks", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 
@@ -243,7 +243,7 @@ def create_app() -> FastAPI:
                 ("intelligence_jobs", "completed_at", "TIMESTAMP WITH TIME ZONE"),
                 ("intelligence_jobs", "error_message", "TEXT"),
                 ("intelligence_jobs", "results", "JSONB"),
-                ("intelligence_jobs", "metadata", "JSONB DEFAULT '{}'"),
+                ("intelligence_jobs", "extra_data", "JSONB DEFAULT '{}'"),
                 ("intelligence_jobs", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 ("intelligence_jobs", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
             ]

@@ -179,7 +179,7 @@ class ActiveRisk(Base):
     risk_status = Column(String(50), default="Planned")  # Planned, Ongoing, Delayed, Completed, Accepted
     detected_by = Column(String(50), default="manual")  # manual, ai_intelligence
     ai_rationale = Column(Text, nullable=True)  # AI explanation for risk score
-    metadata = Column(JSONB, default={})  # Additional risk metadata
+    extra_data = Column(JSONB, default={})  # Additional risk metadata
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -241,6 +241,6 @@ class IntelligenceJob(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(Text, nullable=True)
     results = Column(JSONB, nullable=True)  # {vulnerabilities_found: 5, threats_mapped: 8, ...}
-    metadata = Column(JSONB, default={})  # Additional job metadata
+    extra_data = Column(JSONB, default={})  # Additional job metadata
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
