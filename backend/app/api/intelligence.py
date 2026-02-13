@@ -13,7 +13,7 @@ from ..schemas.schemas import (
     IntelligenceStatusResponse
 )
 from ..services.intelligence_service import intelligence_service
-from ..models.models import IntelligenceJob, Assessment
+from ..models.models import IntelligenceJob, Assessment, ThreatCatalogue
 from ..core.config import settings
 
 router = APIRouter()
@@ -214,3 +214,81 @@ def get_intelligence_job(
         )
 
     return IntelligenceJobRead.model_validate(job)
+
+
+@router.post("/seed-catalogue")
+def seed_threat_catalogue(
+    db: Session = Depends(get_db),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context)
+):
+    """Seed the threat catalogue with standard threat entries."""
+    tenant_id, user_id = context
+
+    threats = [
+        {"catalogue_key": "malicious_code", "name": "Malicious Code/Software", "category": "Application",
+         "description": "Code in any part of a software system intended to cause undesired effects or damage, includes attack scripts, backdoors and malicious active content."},
+        {"catalogue_key": "social_engineering_phishing", "name": "Social Engineering (Phishing)", "category": "Human",
+         "description": "Phishing scams are fraudulent attempts by cybercriminals to obtain private information."},
+        {"catalogue_key": "mitm_eavesdropping", "name": "Man-in-the-middle attack/Eavesdropping", "category": "Network",
+         "description": "A type of cyberattack where a malicious actor intercepts a conversation between two parties and gains access to information."},
+        {"catalogue_key": "password_cracking", "name": "Password Cracking/Credential Management", "category": "Access",
+         "description": "The process of using various techniques to discover computer passwords or stealing computer-based information."},
+        {"catalogue_key": "system_penetration_hacking", "name": "System Penetration/Hacking", "category": "Infrastructure",
+         "description": "An attempt to gain unauthorized access to the IT infrastructure by trying to exploit vulnerabilities."},
+        {"catalogue_key": "dos_disruption", "name": "Denial of Service/Disruption", "category": "Network",
+         "description": "Partial or complete outage of service, termination of contract or forces of nature."},
+        {"catalogue_key": "unauthorized_access", "name": "Unauthorized Access", "category": "Access",
+         "description": "When someone gains access to a website, program, server, service, or other system using someone else's account."},
+        {"catalogue_key": "data_loss_leakage", "name": "Data Loss/Data Leakage", "category": "Data",
+         "description": "An error condition where information is destroyed by failures or neglect in storage, transmission, or processing."},
+        {"catalogue_key": "insider_threats", "name": "Insider Threats", "category": "Human",
+         "description": "Individuals within the organization who intentionally or unintentionally pose a risk to systems or data."},
+        {"catalogue_key": "supply_chain_attacks", "name": "Supply Chain Attacks", "category": "Infrastructure",
+         "description": "Compromising a system through vulnerabilities in third-party vendors, partners, or software/hardware suppliers."},
+        {"catalogue_key": "apt", "name": "Advanced Persistent Threats (APTs)", "category": "Application",
+         "description": "Sophisticated, targeted attacks by state-sponsored or highly skilled adversary groups that persist in a network for extended periods."},
+        {"catalogue_key": "ransomware", "name": "Ransomware", "category": "Application",
+         "description": "Malware that encrypts files/systems and demands payment for decryption. May include data exfiltration threats."},
+        {"catalogue_key": "zero_day", "name": "Zero-Day Exploits", "category": "Application",
+         "description": "Attacks using vulnerabilities unknown to the software vendor with no patches available."},
+        {"catalogue_key": "web_app_attacks", "name": "Web Application Attacks", "category": "Application",
+         "description": "Such as SQL injection, cross-site scripting (XSS), and cross-site request forgery (CSRF) targeting web-based applications."},
+        {"catalogue_key": "physical_breach", "name": "Physical Security Breaches", "category": "Physical",
+         "description": "Unauthorized physical access to infrastructure that could compromise IT assets or data."},
+        {"catalogue_key": "malware_removable_media", "name": "Malware Loaded Removable Media", "category": "Physical",
+         "description": "Attacks via infected USB drives or portable storage devices introduced into secure environments."},
+        {"catalogue_key": "misconfiguration", "name": "Misconfiguration and Weak Security Controls", "category": "Infrastructure",
+         "description": "Poorly configured systems, default credentials, or inadequate policies leading to vulnerabilities."},
+        {"catalogue_key": "cloud_security", "name": "Cloud Security Threats", "category": "Infrastructure",
+         "description": "Risks associated with cloud infrastructure such as misconfigured cloud storage, account hijacking, or insecure APIs."},
+        {"catalogue_key": "iot_ot_threats", "name": "IoT and OT System Threats", "category": "Infrastructure",
+         "description": "Vulnerabilities and attacks targeting Internet-of-Things devices and operational technology environments."},
+    ]
+
+    created = 0
+    skipped = 0
+    for threat_data in threats:
+        existing = db.query(ThreatCatalogue).filter(
+            ThreatCatalogue.catalogue_key == threat_data["catalogue_key"]
+        ).first()
+        if existing:
+            skipped += 1
+            continue
+
+        entry = ThreatCatalogue(
+            tenant_id=tenant_id,
+            catalogue_key=threat_data["catalogue_key"],
+            name=threat_data["name"],
+            title=threat_data["name"],
+            category=threat_data["category"],
+            description=threat_data["description"],
+            default_likelihood="Medium",
+            default_impact="Medium",
+            mitigations=[],
+            is_active=True
+        )
+        db.add(entry)
+        created += 1
+
+    db.commit()
+    return {"created": created, "skipped": skipped, "total": len(threats)}
