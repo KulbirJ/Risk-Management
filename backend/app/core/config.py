@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://admin:password@localhost:5432/multitenantpostgresdb"
     db_echo: bool = False
     db_name: str = "multitenantpostgresdb"
-    db_secret_name: str = "compliance-platform/db/credentials"
+    db_secret_name: str = "postgresql_admin"
     db_secret_arn: Optional[str] = None
 
     # AWS
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     aws_account_id: str = "031195399879"
 
     # S3
-    s3_bucket_evidence: str = "compliance-platform-dev-evidence"
+    s3_bucket_evidence: str = "compliance-platform-evidence-dev"
     s3_bucket_region: str = "ca-west-1"
 
     # Cognito / Auth
@@ -74,10 +74,14 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 500
     evidence_retention_days: int = 365
 
-    # Phase 1: AI/Intelligence (not used in Phase 0)
-    bedrock_enabled: bool = False
-    bedrock_model_id: str = "anthropic.claude-v2"
-    bedrock_region: str = "ca-west-1"
+    # Intelligence Layer / AI
+    bedrock_enabled: bool = True
+    bedrock_model_id: str = "amazon.nova-pro-v1:0"
+    bedrock_fallback_model_id: str = "anthropic.claude-3-haiku-20240307-v1:0"
+    bedrock_region: str = "us-east-1"
+    bedrock_max_tokens: int = 4000
+    bedrock_temperature: float = 0.3
+    intelligence_confidence_threshold: float = 0.7
     openai_api_key: Optional[str] = None
 
     class Config:

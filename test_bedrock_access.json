@@ -1,0 +1,24 @@
+{
+  "version": "2.0",
+  "routeKey": "$default",
+  "rawPath": "/health",
+  "rawQueryString": "",
+  "headers": {
+    "accept": "application/json",
+    "content-type": "application/json"
+  },
+  "requestContext": {
+    "http": {
+      "method": "GET",
+      "path": "/health",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "127.0.0.1",
+      "userAgent": "test"
+    },
+    "routeKey": "$default",
+    "stage": "$default",
+    "time": "12/Feb/2026:00:00:00 +0000",
+    "timeEpoch": 1739318400000
+  },
+  "isBase64Encoded": false
+}

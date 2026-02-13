@@ -135,15 +135,21 @@ class Recommendation(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
-    assessment_id = Column(UUID(as_uuid=True), ForeignKey("assessments.id"), nullable=False)
+    assessment_id = Column(UUID(as_uuid=True), ForeignKey("assessments.id"), nullable=True)
     threat_id = Column(UUID(as_uuid=True), ForeignKey("threats.id"), nullable=True)
-    text = Column(Text, nullable=False)
+    active_risk_id = Column(UUID(as_uuid=True), ForeignKey("active_risks.id"), nullable=True)
+    title = Column(String(255), nullable=True)
+    description = Column(Text, nullable=False)
+    text = Column(Text, nullable=True)  # Deprecated, use description
     type = Column(String(50), default="remediation")  # mitigation, remediation, compensating
-    priority = Column(String(20), default="Medium")  # Low, Medium, High
+    priority = Column(String(20), default="Medium")  # Low, Medium, High, Critical
     status = Column(String(50), default="open")  # open, in_progress, done, accepted
     owner_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     target_date = Column(DateTime(timezone=True), nullable=True)
-    confidence_score = Column(Integer, default=0)  # 0-100 (Phase 1: AI confidence)
+    confidence_score = Column(Integer, default=0)  # 0-100 (AI confidence)
+    ai_generated = Column(Boolean, default=False)
+    estimated_effort = Column(String(20), nullable=True)  # low, medium, high
+    cost_estimate = Column(String(20), nullable=True)  # low, medium, high
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -160,14 +166,20 @@ class ActiveRisk(Base):
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
     assessment_id = Column(UUID(as_uuid=True), ForeignKey("assessments.id"), nullable=False)
     threat_id = Column(UUID(as_uuid=True), ForeignKey("threats.id"), nullable=False)
-    title = Column(String(255), nullable=False)
+    title = Column(String(255), nullable=True)
+    risk_score = Column(Integer, default=50)  # 0-100 calculated risk score
+    likelihood = Column(Integer, default=5)  # 1-10 probability score
+    impact = Column(Integer, default=5)  # 1-10 impact score
     residual_risk = Column(String(20), default="Medium")  # Low, Medium, High, Critical
-    risk_owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    risk_owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     mitigation_plan = Column(Text, nullable=True)
     acceptance_date = Column(DateTime(timezone=True), nullable=True)
     review_cycle_days = Column(Integer, default=30)
     status = Column(String(50), default="open")  # open, accepted, mitigating, closed
     risk_status = Column(String(50), default="Planned")  # Planned, Ongoing, Delayed, Completed, Accepted
+    detected_by = Column(String(50), default="manual")  # manual, ai_intelligence
+    ai_rationale = Column(Text, nullable=True)  # AI explanation for risk score
+    metadata = Column(JSONB, default={})  # Additional risk metadata
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -202,10 +214,33 @@ class ThreatCatalogue(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
     catalogue_key = Column(String(255), nullable=False, unique=True)  # e.g., "malicious_code"
-    title = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False)  # Display name
+    title = Column(String(255), nullable=True)  # Alias for name
+    category = Column(String(100), nullable=True)  # Threat category (e.g., "Network", "Application", "Physical")
     description = Column(Text, nullable=True)
     default_likelihood = Column(String(20), default="Medium")  # default likelihood
     default_impact = Column(String(20), default="Medium")  # default impact
     mitigations = Column(JSONB, default=[])  # List of suggested mitigations
+    is_active = Column(Boolean, default=True)  # Active threats shown in intelligence mapping
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class IntelligenceJob(Base):
+    """Track AI enrichment jobs for assessments."""
+    __tablename__ = "intelligence_jobs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    assessment_id = Column(UUID(as_uuid=True), ForeignKey("assessments.id"), nullable=False, index=True)
+    initiated_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    status = Column(String(50), default="pending")  # pending, running, completed, failed
+    job_type = Column(String(50), default="full_enrichment")  # full_enrichment, vulnerability_scan, threat_mapping, etc.
+    model_id = Column(String(255), nullable=True)  # Bedrock model used
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    error_message = Column(Text, nullable=True)
+    results = Column(JSONB, nullable=True)  # {vulnerabilities_found: 5, threats_mapped: 8, ...}
+    metadata = Column(JSONB, default={})  # Additional job metadata
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

@@ -247,3 +247,52 @@ class AuditLogRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Intelligence schemas
+class IntelligenceEnrichRequest(BaseModel):
+    """Request to enrich an assessment with AI analysis."""
+    assessment_id: UUID
+    job_type: str = "full_enrichment"  # full_enrichment, vulnerability_scan, threat_mapping
+
+
+class IntelligenceEnrichResponse(BaseModel):
+    """Response from an enrichment job."""
+    job_id: UUID
+    assessment_id: UUID
+    status: str
+    vulnerabilities_identified: int = 0
+    threats_mapped: int = 0
+    risks_created: int = 0
+    recommendations_generated: int = 0
+    errors: List[str] = []
+    model_used: Optional[str] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class IntelligenceJobRead(BaseModel):
+    """Read schema for intelligence jobs."""
+    id: UUID
+    assessment_id: UUID
+    initiated_by_id: UUID
+    status: str
+    job_type: str
+    model_id: Optional[str] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+    results: Optional[dict] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class IntelligenceStatusResponse(BaseModel):
+    """Status check for the intelligence service."""
+    bedrock_enabled: bool
+    primary_model: str
+    fallback_model: str
+    bedrock_region: str
+    confidence_threshold: float

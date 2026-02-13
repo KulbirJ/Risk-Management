@@ -111,7 +111,7 @@ def create_app() -> FastAPI:
         from .db.database import SessionLocal, engine, Base
         from .models.models import (
             Tenant, User, Assessment, Threat, Evidence,
-            Recommendation, ActiveRisk, AuditLog, ThreatCatalogue
+            Recommendation, ActiveRisk, AuditLog, ThreatCatalogue, IntelligenceJob
         )
         
         db = SessionLocal()
@@ -181,23 +181,35 @@ def create_app() -> FastAPI:
                 ("evidence", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 
                 # ============ RECOMMENDATIONS TABLE ============
+                ("recommendations", "title", "VARCHAR(255)"),
+                ("recommendations", "description", "TEXT"),
                 ("recommendations", "text", "TEXT"),
                 ("recommendations", "type", "VARCHAR(50) DEFAULT 'remediation'"),
                 ("recommendations", "priority", "VARCHAR(20) DEFAULT 'Medium'"),
                 ("recommendations", "status", "VARCHAR(50) DEFAULT 'open'"),
                 ("recommendations", "target_date", "TIMESTAMP WITH TIME ZONE"),
                 ("recommendations", "confidence_score", "INTEGER DEFAULT 0"),
+                ("recommendations", "ai_generated", "BOOLEAN DEFAULT FALSE"),
+                ("recommendations", "active_risk_id", "UUID REFERENCES active_risks(id)"),
+                ("recommendations", "estimated_effort", "VARCHAR(20)"),
+                ("recommendations", "cost_estimate", "VARCHAR(20)"),
                 ("recommendations", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 ("recommendations", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 
                 # ============ ACTIVE_RISKS TABLE ============
                 ("active_risks", "title", "VARCHAR(255)"),
+                ("active_risks", "risk_score", "INTEGER DEFAULT 50"),
+                ("active_risks", "likelihood", "INTEGER DEFAULT 5"),
+                ("active_risks", "impact", "INTEGER DEFAULT 5"),
                 ("active_risks", "residual_risk", "VARCHAR(20) DEFAULT 'Medium'"),
                 ("active_risks", "mitigation_plan", "TEXT"),
                 ("active_risks", "acceptance_date", "TIMESTAMP WITH TIME ZONE"),
                 ("active_risks", "review_cycle_days", "INTEGER DEFAULT 30"),
                 ("active_risks", "status", "VARCHAR(50) DEFAULT 'open'"),
                 ("active_risks", "risk_status", "VARCHAR(50) DEFAULT 'Planned'"),
+                ("active_risks", "detected_by", "VARCHAR(50) DEFAULT 'manual'"),
+                ("active_risks", "ai_rationale", "TEXT"),
+                ("active_risks", "metadata", "JSONB DEFAULT '{}'"),
                 ("active_risks", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 ("active_risks", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 
@@ -212,13 +224,28 @@ def create_app() -> FastAPI:
                 
                 # ============ THREAT_CATALOGUE TABLE ============
                 ("threat_catalogue", "catalogue_key", "VARCHAR(255)"),
+                ("threat_catalogue", "name", "VARCHAR(255)"),
                 ("threat_catalogue", "title", "VARCHAR(255)"),
+                ("threat_catalogue", "category", "VARCHAR(100)"),
                 ("threat_catalogue", "description", "TEXT"),
                 ("threat_catalogue", "default_likelihood", "VARCHAR(20) DEFAULT 'Medium'"),
                 ("threat_catalogue", "default_impact", "VARCHAR(20) DEFAULT 'Medium'"),
                 ("threat_catalogue", "mitigations", "JSONB DEFAULT '[]'"),
+                ("threat_catalogue", "is_active", "BOOLEAN DEFAULT TRUE"),
                 ("threat_catalogue", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 ("threat_catalogue", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ INTELLIGENCE_JOBS TABLE ============
+                ("intelligence_jobs", "status", "VARCHAR(50) DEFAULT 'pending'"),
+                ("intelligence_jobs", "job_type", "VARCHAR(50) DEFAULT 'full_enrichment'"),
+                ("intelligence_jobs", "model_id", "VARCHAR(255)"),
+                ("intelligence_jobs", "started_at", "TIMESTAMP WITH TIME ZONE"),
+                ("intelligence_jobs", "completed_at", "TIMESTAMP WITH TIME ZONE"),
+                ("intelligence_jobs", "error_message", "TEXT"),
+                ("intelligence_jobs", "results", "JSONB"),
+                ("intelligence_jobs", "metadata", "JSONB DEFAULT '{}'"),
+                ("intelligence_jobs", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                ("intelligence_jobs", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
             ]
             
             for table_name, column_name, column_def in schema_updates:
@@ -247,7 +274,7 @@ def create_app() -> FastAPI:
             db.close()
     
     # Include API routers
-    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs
+    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence
     
     app.include_router(
         assessments.router,
@@ -278,6 +305,11 @@ def create_app() -> FastAPI:
         audit_logs.router,
         prefix="/api/v1/audit-logs",
         tags=["audit-logs"]
+    )
+    app.include_router(
+        intelligence.router,
+        prefix="/api/v1/intelligence",
+        tags=["intelligence"]
     )
     
     # Future routers (Phase 2+)
