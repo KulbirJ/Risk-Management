@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
 
     # Database
-    database_url: str = "postgresql://admin:password@localhost:5432/multitenantpostgresdb"
+    database_url: str = "postgresql://admin:password@localhost:5432/postgres"
     db_echo: bool = False
-    db_name: str = "multitenantpostgresdb"
+    db_name: str = "postgres"
     db_secret_name: str = "postgresql_admin"
     db_secret_arn: Optional[str] = None
 
