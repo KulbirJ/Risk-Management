@@ -224,8 +224,7 @@ Analyze this assessment and return the comprehensive JSON analysis."""
 
         response = self.bedrock.generate_structured_output(
             prompt=prompt,
-            system_prompt=system_prompt,
-            max_tokens=4000
+            system_prompt=system_prompt
         )
 
         if not response:
