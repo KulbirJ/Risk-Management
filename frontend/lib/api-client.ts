@@ -5,7 +5,11 @@ import type {
   Threat, 
   Evidence, 
   AuditLog, 
-  Recommendation 
+  Recommendation,
+  IntelligenceEnrichRequest,
+  IntelligenceEnrichResponse,
+  IntelligenceJob,
+  IntelligenceStatus
 } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -190,6 +194,46 @@ class APIClient {
     limit?: number;
   }): Promise<any[]> {
     const { data } = await this.client.get('/threat-catalogue', { params });
+    return data;
+  }
+
+  // Intelligence / AI Enrichment
+  async getIntelligenceStatus(): Promise<IntelligenceStatus> {
+    const { data } = await this.client.get('/intelligence/status');
+    return data;
+  }
+
+  async enrichAssessment(assessmentId: string, jobType: string = 'full_enrichment'): Promise<IntelligenceEnrichResponse> {
+    const { data } = await this.client.post('/intelligence/enrich', {
+      assessment_id: assessmentId,
+      job_type: jobType,
+    });
+    return data;
+  }
+
+  async getIntelligenceJobs(params?: {
+    assessment_id?: string;
+    status?: string;
+    limit?: number;
+  }): Promise<IntelligenceJob[]> {
+    const { data } = await this.client.get('/intelligence/jobs', { params });
+    return data;
+  }
+
+  async getIntelligenceJob(jobId: string): Promise<IntelligenceJob> {
+    const { data } = await this.client.get(`/intelligence/jobs/${jobId}`);
+    return data;
+  }
+
+  async seedThreatCatalogue(): Promise<any> {
+    const { data } = await this.client.post('/intelligence/seed-catalogue');
+    return data;
+  }
+
+  async resetIntelligenceJobs(assessmentId: string): Promise<any> {
+    const { data } = await this.client.post('/intelligence/reset-jobs', null, {
+      params: { assessment_id: assessmentId },
+    });
     return data;
   }
 }

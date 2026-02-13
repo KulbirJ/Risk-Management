@@ -3,14 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { LoadingPage } from '../../../components/LoadingSpinner';
 import { Alert } from '../../../components/Alert';
 import { StatusBadge, SeverityBadge } from '../../../components/Badge';
 import { ThreatModal, ThreatFormData } from '../../../components/ThreatModal';
+import { IntelligencePanel, AiBadge } from '../../../components/IntelligencePanel';
 import apiClient from '../../../lib/api-client';
-import { Assessment, Threat, ActiveRisk } from '../../../lib/types';
+import { Assessment, Threat, ActiveRisk, Recommendation } from '../../../lib/types';
 import { format } from 'date-fns';
 
 export default function AssessmentDetailPage() {
@@ -22,6 +23,8 @@ export default function AssessmentDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [threats, setThreats] = useState<Threat[]>([]);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [activeRisks, setActiveRisks] = useState<ActiveRisk[]>([]);
   const [isThreatModalOpen, setIsThreatModalOpen] = useState(false);
   const [editingThreat, setEditingThreat] = useState<Threat | null>(null);
 
@@ -34,13 +37,17 @@ export default function AssessmentDetailPage() {
       setLoading(true);
       setError(null);
 
-      const [assessmentData, threatsData] = await Promise.all([
+      const [assessmentData, threatsData, recommendationsData, activeRisksData] = await Promise.all([
         apiClient.getAssessment(assessmentId),
         apiClient.getThreats(assessmentId),
+        apiClient.getRecommendations({ assessment_id: assessmentId }).catch(() => []),
+        apiClient.getActiveRisks({ assessment_id: assessmentId }).catch(() => []),
       ]);
 
       setAssessment(assessmentData);
       setThreats(threatsData);
+      setRecommendations(recommendationsData);
+      setActiveRisks(activeRisksData);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load assessment');
     } finally {
@@ -218,6 +225,94 @@ export default function AssessmentDetailPage() {
         </div>
       </div>
 
+      {/* AI Intelligence Panel */}
+      <IntelligencePanel
+        assessmentId={assessmentId}
+        onEnrichComplete={loadAssessmentData}
+      />
+
+      {/* Active Risks from AI */}
+      {activeRisks.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Shield className="w-5 h-5 text-red-500" />
+            Active Risks ({activeRisks.length})
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {activeRisks.map((risk) => (
+              <div
+                key={risk.id}
+                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold text-gray-900">{risk.title || 'Untitled Risk'}</h4>
+                      <AiBadge />
+                    </div>
+                  </div>
+                  <SeverityBadge severity={risk.residual_risk} />
+                </div>
+                {risk.mitigation_plan && (
+                  <p className="text-sm text-gray-600 mt-1 line-clamp-2">{risk.mitigation_plan}</p>
+                )}
+                <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
+                  <span className="capitalize">Status: {risk.status}</span>
+                  <span className="capitalize">Progress: {risk.risk_status}</span>
+                  <span>Review: {risk.review_cycle_days}d</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recommendations from AI */}
+      {recommendations.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Lightbulb className="w-5 h-5 text-green-500" />
+            Recommendations ({recommendations.length})
+          </h2>
+          <div className="space-y-3">
+            {recommendations.map((rec) => (
+              <div
+                key={rec.id}
+                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-semibold text-gray-900">
+                        {rec.title || rec.text || 'Recommendation'}
+                      </h4>
+                      {rec.ai_generated && <AiBadge />}
+                      <PriorityBadge priority={rec.priority} />
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      {rec.description || rec.text || ''}
+                    </p>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    rec.status === 'implemented' ? 'bg-green-100 text-green-700' :
+                    rec.status === 'approved' ? 'bg-blue-100 text-blue-700' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {rec.status}
+                  </span>
+                </div>
+                {(rec.estimated_effort || rec.cost_estimate) && (
+                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                    {rec.estimated_effort && <span>Effort: {rec.estimated_effort}</span>}
+                    {rec.cost_estimate && <span>Cost: {rec.cost_estimate}</span>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Threats List */}
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold text-gray-900">Identified Threats</h2>
@@ -246,12 +341,23 @@ export default function AssessmentDetailPage() {
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900">{threat.title}</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {threat.title}
+                    {threat.detected_by === 'ai' && (
+                      <span className="ml-2 inline-block align-middle"><AiBadge /></span>
+                    )}
+                  </h3>
                   <p className="text-sm text-gray-600 mt-1">{threat.description}</p>
                   {threat.recommendation && (
                     <div className="mt-2 p-2 bg-blue-50 border-l-2 border-blue-500 rounded">
                       <span className="text-xs font-medium text-blue-700">Recommendation:</span>
                       <p className="text-sm text-blue-900 mt-1">{threat.recommendation}</p>
+                    </div>
+                  )}
+                  {threat.ai_rationale && (
+                    <div className="mt-2 p-2 bg-indigo-50 border-l-2 border-indigo-400 rounded">
+                      <span className="text-xs font-medium text-indigo-700">AI Rationale:</span>
+                      <p className="text-sm text-indigo-900 mt-1">{threat.ai_rationale}</p>
                     </div>
                   )}
                 </div>
@@ -303,5 +409,21 @@ export default function AssessmentDetailPage() {
         threat={editingThreat}
       />
     </div>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: string }) {
+  const colors: Record<string, string> = {
+    high: 'bg-red-100 text-red-700',
+    medium: 'bg-yellow-100 text-yellow-700',
+    low: 'bg-green-100 text-green-700',
+    High: 'bg-red-100 text-red-700',
+    Medium: 'bg-yellow-100 text-yellow-700',
+    Low: 'bg-green-100 text-green-700',
+  };
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[priority] || 'bg-gray-100 text-gray-700'}`}>
+      {priority}
+    </span>
   );
 }

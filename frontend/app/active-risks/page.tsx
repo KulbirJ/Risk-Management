@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Search, Filter } from 'lucide-react';
+import { Search, Filter, Sparkles } from 'lucide-react';
 import { LoadingPage } from '../../components/LoadingSpinner';
 import { Alert } from '../../components/Alert';
 import { StatusBadge, SeverityBadge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import ActiveRiskModal, { ActiveRiskFormData } from '../../components/ActiveRiskModal';
+import { AiBadge } from '../../components/IntelligencePanel';
 import apiClient from '../../lib/api-client';
 import { ActiveRisk } from '../../lib/types';
 import { format } from 'date-fns';
@@ -199,8 +200,11 @@ export default function ActiveRisksPage() {
                   onClick={() => openEditModal(risk)}
                 >
                   <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900 max-w-md">
-                      {risk.title}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900 max-w-md">
+                        {risk.title}
+                      </span>
+                      {risk.detected_by === 'ai_intelligence' && <AiBadge />}
                     </div>
                     {risk.mitigation_plan && (
                       <div className="text-xs text-gray-500 mt-1">
