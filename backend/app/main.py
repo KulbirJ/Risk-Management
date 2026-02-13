@@ -265,6 +265,21 @@ def create_app() -> FastAPI:
             db.commit()
             results.append("Schema sync completed")
             
+            # Fix nullable constraints that may have been set incorrectly
+            nullable_fixes = [
+                ("active_risks", "title"),
+                ("active_risks", "risk_owner_id"),
+                ("recommendations", "assessment_id"),
+                ("recommendations", "threat_id"),
+            ]
+            for table_name, column_name in nullable_fixes:
+                try:
+                    db.execute(text(f"ALTER TABLE {table_name} ALTER COLUMN {column_name} DROP NOT NULL"))
+                    results.append(f"Made {table_name}.{column_name} nullable")
+                except Exception:
+                    pass  # Already nullable or column doesn't exist
+            db.commit()
+
             return {"status": "success", "results": results}
         except Exception as e:
             db.rollback()

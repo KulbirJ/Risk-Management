@@ -113,6 +113,7 @@ class IntelligenceService:
                 except Exception as e:
                     logger.error(f"Error processing vulnerability: {e}")
                     results["errors"].append(str(e))
+                    db.rollback()  # Roll back failed vulnerability processing
 
             db.commit()
             logger.info(f"Assessment enrichment completed: {results}")
@@ -322,13 +323,19 @@ Return valid JSON object."""
     ) -> Optional[ActiveRisk]:
         """Create an active risk from AI analysis."""
         try:
+            # Build a descriptive title from vuln + threat
+            vuln_title = vulnerability.get('title', 'Unknown Vulnerability')
+            risk_title = f"{vuln_title} - {threat.title or 'Risk'}"
+
             active_risk = ActiveRisk(
                 tenant_id=assessment.tenant_id,
                 assessment_id=assessment.id,
                 threat_id=threat.id,
+                title=risk_title[:255],
                 risk_score=risk_data.get('risk_score', 50),
                 likelihood=risk_data.get('likelihood', 5),
                 impact=risk_data.get('impact', 5),
+                residual_risk=self._residual_from_score(risk_data.get('risk_score', 50)),
                 status="open",
                 detected_by="ai_intelligence",
                 ai_rationale=risk_data.get('justification', ''),
@@ -411,6 +418,18 @@ Return JSON object with key "recommendations", each having:
         db.flush()
         logger.info(f"Generated {len(created_recommendations)} recommendations")
         return created_recommendations
+
+
+    @staticmethod
+    def _residual_from_score(score: int) -> str:
+        """Convert numeric risk score to residual risk category."""
+        if score >= 80:
+            return "Critical"
+        elif score >= 60:
+            return "High"
+        elif score >= 40:
+            return "Medium"
+        return "Low"
 
 
 # Global instance
