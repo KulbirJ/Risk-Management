@@ -1,8 +1,8 @@
 """Intelligence API router endpoints for AI enrichment."""
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.orm import Session
 
 from ..db.database import get_db
@@ -27,55 +27,6 @@ def get_tenant_context(
     return x_tenant_id, x_user_id
 
 
-def _run_enrichment_job(
-    job_id: str,
-    assessment_id: str,
-    tenant_id: str,
-    db_url: str
-):
-    """Background task to run enrichment job."""
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
-    engine = create_engine(db_url, pool_pre_ping=True)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    db = SessionLocal()
-
-    try:
-        # Update job status to running
-        job = db.query(IntelligenceJob).filter(IntelligenceJob.id == job_id).first()
-        if job:
-            job.status = "running"
-            job.started_at = datetime.utcnow()
-            db.commit()
-
-        # Run enrichment
-        results = intelligence_service.enrich_assessment(
-            db=db,
-            assessment_id=assessment_id,
-            tenant_id=tenant_id
-        )
-
-        # Update job with results
-        if job:
-            job.status = results.get("status", "completed")
-            job.completed_at = datetime.utcnow()
-            job.results = results
-            job.model_id = settings.bedrock_model_id
-            if results.get("errors"):
-                job.error_message = "; ".join(results["errors"][:5])
-            db.commit()
-
-    except Exception as e:
-        if job:
-            job.status = "failed"
-            job.completed_at = datetime.utcnow()
-            job.error_message = str(e)
-            db.commit()
-    finally:
-        db.close()
-
-
 @router.get("/status", response_model=IntelligenceStatusResponse)
 def get_intelligence_status():
     """Check the status and configuration of the intelligence service."""
@@ -88,17 +39,16 @@ def get_intelligence_status():
     )
 
 
-@router.post("/enrich", response_model=IntelligenceEnrichResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/enrich", response_model=IntelligenceEnrichResponse)
 def enrich_assessment(
     request: IntelligenceEnrichRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     context: tuple[UUID, UUID] = Depends(get_tenant_context)
 ):
     """
-    Trigger AI enrichment for an assessment.
+    Run AI enrichment for an assessment (synchronous for Lambda compatibility).
     
-    This starts a background job that:
+    This:
     1. Extracts vulnerabilities from the assessment description
     2. Maps threats from the threat catalogue
     3. Calculates risk scores
@@ -124,6 +74,20 @@ def enrich_assessment(
             detail=f"Assessment {request.assessment_id} not found"
         )
 
+    # Auto-expire stuck jobs older than 5 minutes
+    stuck_cutoff = datetime.utcnow() - timedelta(minutes=5)
+    stuck_jobs = db.query(IntelligenceJob).filter(
+        IntelligenceJob.assessment_id == request.assessment_id,
+        IntelligenceJob.status.in_(["pending", "running"]),
+        IntelligenceJob.created_at < stuck_cutoff
+    ).all()
+    for sj in stuck_jobs:
+        sj.status = "failed"
+        sj.error_message = "Auto-expired: job exceeded 5 minute timeout"
+        sj.completed_at = datetime.utcnow()
+    if stuck_jobs:
+        db.commit()
+
     # Check for existing running jobs
     existing_job = db.query(IntelligenceJob).filter(
         IntelligenceJob.assessment_id == request.assessment_id,
@@ -141,30 +105,49 @@ def enrich_assessment(
         tenant_id=tenant_id,
         assessment_id=request.assessment_id,
         initiated_by_id=user_id,
-        status="pending",
+        status="running",
         job_type=request.job_type,
-        model_id=settings.bedrock_model_id
+        model_id=settings.bedrock_model_id,
+        started_at=datetime.utcnow()
     )
     db.add(job)
     db.commit()
     db.refresh(job)
 
-    # Run enrichment in background
-    background_tasks.add_task(
-        _run_enrichment_job,
-        job_id=str(job.id),
-        assessment_id=str(request.assessment_id),
-        tenant_id=str(tenant_id),
-        db_url=settings.database_url
-    )
+    # Run enrichment synchronously (Lambda doesn't support background tasks)
+    try:
+        results = intelligence_service.enrich_assessment(
+            db=db,
+            assessment_id=str(request.assessment_id),
+            tenant_id=str(tenant_id)
+        )
+
+        job.status = results.get("status", "completed")
+        job.completed_at = datetime.utcnow()
+        job.results = results
+        if results.get("errors"):
+            job.error_message = "; ".join(str(e) for e in results["errors"][:5])
+        db.commit()
+
+    except Exception as e:
+        job.status = "failed"
+        job.completed_at = datetime.utcnow()
+        job.error_message = str(e)
+        db.commit()
+        results = {"errors": [str(e)]}
 
     return IntelligenceEnrichResponse(
         job_id=job.id,
         assessment_id=request.assessment_id,
-        status="pending",
+        status=job.status,
+        vulnerabilities_identified=results.get("vulnerabilities_identified", 0),
+        threats_mapped=results.get("threats_mapped", 0),
+        risks_created=results.get("risks_created", 0),
+        recommendations_generated=results.get("recommendations_generated", 0),
+        errors=results.get("errors", []),
         model_used=settings.bedrock_model_id,
-        started_at=None,
-        completed_at=None
+        started_at=job.started_at,
+        completed_at=job.completed_at
     )
 
 
