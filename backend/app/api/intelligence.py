@@ -275,3 +275,31 @@ def seed_threat_catalogue(
 
     db.commit()
     return {"created": created, "skipped": skipped, "total": len(threats)}
+
+
+@router.post("/reset-jobs")
+def reset_stuck_jobs(
+    assessment_id: Optional[UUID] = None,
+    db: Session = Depends(get_db),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context)
+):
+    """Reset all stuck (pending/running) jobs for a tenant or specific assessment."""
+    tenant_id, user_id = context
+
+    query = db.query(IntelligenceJob).filter(
+        IntelligenceJob.tenant_id == tenant_id,
+        IntelligenceJob.status.in_(["pending", "running"])
+    )
+    if assessment_id:
+        query = query.filter(IntelligenceJob.assessment_id == assessment_id)
+
+    stuck_jobs = query.all()
+    count = 0
+    for job in stuck_jobs:
+        job.status = "failed"
+        job.error_message = "Manually reset by user"
+        job.completed_at = datetime.utcnow()
+        count += 1
+
+    db.commit()
+    return {"reset_count": count}
