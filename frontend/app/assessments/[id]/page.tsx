@@ -159,7 +159,7 @@ export default function AssessmentDetailPage() {
           };
 
           try {
-            await apiClient.createActiveRisk(assessmentId, activeRiskPayload);
+            await apiClient.createActiveRisk(assessmentId, activeRiskPayload as Partial<ActiveRisk>);
           } catch (riskErr: any) {
             console.warn('Failed to create active risk entry:', riskErr);
             // Continue with threat update even if risk creation fails
