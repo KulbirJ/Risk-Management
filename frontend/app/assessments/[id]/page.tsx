@@ -353,42 +353,6 @@ export default function AssessmentDetailPage() {
         onEnrichComplete={loadAssessmentData}
       />
 
-      {/* Active Risks from AI */}
-      {activeRisks.length > 0 && (
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Shield className="w-5 h-5 text-red-500" />
-            Active Risks ({activeRisks.length})
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {activeRisks.map((risk) => (
-              <div
-                key={risk.id}
-                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-semibold text-gray-900">{risk.title || 'Untitled Risk'}</h4>
-                      <AiBadge />
-                    </div>
-                  </div>
-                  <SeverityBadge severity={risk.residual_risk} />
-                </div>
-                {risk.mitigation_plan && (
-                  <p className="text-sm text-gray-600 mt-1 line-clamp-2">{risk.mitigation_plan}</p>
-                )}
-                <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
-                  <span className="capitalize">Status: {risk.status}</span>
-                  <span className="capitalize">Progress: {risk.risk_status}</span>
-                  <span>Review: {risk.review_cycle_days}d</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Recommendations from AI */}
       {recommendations.length > 0 && (
         <div className="mb-6">
