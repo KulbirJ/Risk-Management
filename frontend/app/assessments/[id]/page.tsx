@@ -82,7 +82,7 @@ export default function AssessmentDetailPage() {
     try {
       setEditSaving(true);
       setError(null);
-      await apiClient.updateAssessment(assessmentId, editFormData);
+      await apiClient.updateAssessment(assessmentId, editFormData as Partial<Assessment>);
       await loadAssessmentData();
       setIsEditingAssessment(false);
     } catch (err: any) {
