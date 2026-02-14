@@ -34,7 +34,7 @@ export default function DashboardPage() {
       // Load stats and recent data
       const [assessmentsResponse, risksResponse] = await Promise.all([
         apiClient.getAssessments({ limit: 5 }),
-        apiClient.getActiveRisks({ status: 'open' }),
+        apiClient.getActiveRisks({ status: 'open' }).catch(() => []),
       ]);
 
       const assessments = assessmentsResponse;

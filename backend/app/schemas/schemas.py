@@ -183,7 +183,7 @@ class RecommendationRead(RecommendationBase):
 
 # Active Risk schemas
 class ActiveRiskBase(BaseModel):
-    title: str
+    title: Optional[str] = None
     residual_risk: str = "Medium"
     mitigation_plan: Optional[str] = None
     risk_status: str = "Planned"
@@ -196,18 +196,27 @@ class ActiveRiskCreate(ActiveRiskBase):
 
 
 class ActiveRiskUpdate(BaseModel):
+    title: Optional[str] = None
     residual_risk: Optional[str] = None
     mitigation_plan: Optional[str] = None
     status: Optional[str] = None
     risk_status: Optional[str] = None
+    review_cycle_days: Optional[int] = None
 
 
 class ActiveRiskRead(ActiveRiskBase):
     id: UUID
+    assessment_id: UUID
     threat_id: UUID
-    risk_owner_id: UUID
+    risk_owner_id: Optional[UUID] = None
+    review_cycle_days: Optional[int] = 30
     status: str
     acceptance_date: Optional[datetime] = None
+    detected_by: Optional[str] = None
+    ai_rationale: Optional[str] = None
+    risk_score: Optional[int] = None
+    likelihood: Optional[int] = None
+    impact: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

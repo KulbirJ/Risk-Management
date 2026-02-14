@@ -27,6 +27,16 @@ export default function AssessmentDetailPage() {
   const [activeRisks, setActiveRisks] = useState<ActiveRisk[]>([]);
   const [isThreatModalOpen, setIsThreatModalOpen] = useState(false);
   const [editingThreat, setEditingThreat] = useState<Threat | null>(null);
+  const [isEditingAssessment, setIsEditingAssessment] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    title: '',
+    description: '',
+    system_background: '',
+    scope: '',
+    overall_impact: 'Medium',
+    status: 'draft',
+  });
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     loadAssessmentData();
@@ -52,6 +62,33 @@ export default function AssessmentDetailPage() {
       setError(err.response?.data?.detail || 'Failed to load assessment');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEditAssessment = () => {
+    if (!assessment) return;
+    setEditFormData({
+      title: assessment.title || '',
+      description: assessment.description || '',
+      system_background: assessment.system_background || '',
+      scope: assessment.scope || '',
+      overall_impact: assessment.overall_impact || 'Medium',
+      status: assessment.status || 'draft',
+    });
+    setIsEditingAssessment(true);
+  };
+
+  const handleSaveAssessment = async () => {
+    try {
+      setEditSaving(true);
+      setError(null);
+      await apiClient.updateAssessment(assessmentId, editFormData);
+      await loadAssessmentData();
+      setIsEditingAssessment(false);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to update assessment');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -110,17 +147,23 @@ export default function AssessmentDetailPage() {
         // If status changed to 'at_risk', create an active risk entry
         if (formData.status === 'at_risk' && editingThreat.status !== 'at_risk') {
           // Create risk register entry
-          const activeRiskPayload: Partial<ActiveRisk> = {
+          const ownerId = assessment?.owner_user_id || '0bc9d6a9-f342-452e-9297-ee33f44d4f84';
+          const activeRiskPayload = {
             threat_id: editingThreat.id,
             title: formData.title,
             residual_risk: formData.impact as 'Low' | 'Medium' | 'High' | 'Critical',
-            risk_owner_id: assessment?.owner_user_id || '',
-            mitigation_plan: formData.description || '',
+            risk_owner_id: ownerId,
+            mitigation_plan: formData.description || 'Mitigation plan pending',
             review_cycle_days: 30,
             risk_status: 'Planned',
           };
 
-          await apiClient.createActiveRisk(assessmentId, activeRiskPayload);
+          try {
+            await apiClient.createActiveRisk(assessmentId, activeRiskPayload);
+          } catch (riskErr: any) {
+            console.warn('Failed to create active risk entry:', riskErr);
+            // Continue with threat update even if risk creation fails
+          }
         }
       }
 
@@ -194,7 +237,7 @@ export default function AssessmentDetailPage() {
             <p className="text-gray-600">{assessment.description || 'No description'}</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" onClick={handleEditAssessment}>
               <Edit className="w-4 h-4 mr-2" />
               Edit
             </Button>
@@ -205,24 +248,103 @@ export default function AssessmentDetailPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-6 text-sm">
-          <div>
-            <span className="text-gray-500">Overall Impact:</span>
-            <p className="font-medium capitalize mt-1">{assessment.overall_impact}</p>
+        {isEditingAssessment ? (
+          <div className="mt-4 space-y-4 border-t border-gray-200 pt-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+              <input
+                type="text"
+                value={editFormData.title}
+                onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                value={editFormData.description}
+                onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">System Background</label>
+                <textarea
+                  value={editFormData.system_background}
+                  onChange={(e) => setEditFormData({ ...editFormData, system_background: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Scope</label>
+                <textarea
+                  value={editFormData.scope}
+                  onChange={(e) => setEditFormData({ ...editFormData, scope: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Overall Impact</label>
+                <select
+                  value={editFormData.overall_impact}
+                  onChange={(e) => setEditFormData({ ...editFormData, overall_impact: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={editFormData.status}
+                  onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="draft">Draft</option>
+                  <option value="in_review">In Review</option>
+                  <option value="completed">Completed</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="ghost" size="sm" onClick={() => setIsEditingAssessment(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSaveAssessment} disabled={editSaving}>
+                {editSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
           </div>
-          <div>
-            <span className="text-gray-500">Created:</span>
-            <p className="font-medium mt-1">
-              {format(new Date(assessment.created_at), 'MMM d, yyyy')}
-            </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-6 text-sm">
+            <div>
+              <span className="text-gray-500">Overall Impact:</span>
+              <p className="font-medium capitalize mt-1">{assessment.overall_impact}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">Created:</span>
+              <p className="font-medium mt-1">
+                {format(new Date(assessment.created_at), 'MMM d, yyyy')}
+              </p>
+            </div>
+            <div>
+              <span className="text-gray-500">Last Updated:</span>
+              <p className="font-medium mt-1">
+                {format(new Date(assessment.updated_at), 'MMM d, yyyy')}
+              </p>
+            </div>
           </div>
-          <div>
-            <span className="text-gray-500">Last Updated:</span>
-            <p className="font-medium mt-1">
-              {format(new Date(assessment.updated_at), 'MMM d, yyyy')}
-            </p>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* AI Intelligence Panel */}
