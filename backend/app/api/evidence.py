@@ -143,6 +143,47 @@ async def proxy_upload(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+@router.post("/{evidence_id}/retry", response_model=EvidenceRead)
+def retry_processing(
+    evidence_id: UUID,
+    db: Session = Depends(get_db),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context)
+):
+    """
+    Retry processing for stuck evidence (status=processing or failed).
+    Re-verifies S3 upload and re-triggers document parsing.
+    """
+    tenant_id, user_id = context
+
+    evidence = EvidenceService.get_evidence(db=db, evidence_id=evidence_id, tenant_id=tenant_id)
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+
+    if evidence.status == "ready":
+        return evidence  # Already processed
+
+    # Check if file is actually in S3
+    if not verify_s3_upload(evidence.s3_key):
+        # File never made it to S3 - mark as failed
+        EvidenceService.update_evidence_status(db, evidence_id, tenant_id, "failed")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File not found in S3. Please delete this entry and re-upload."
+        )
+
+    try:
+        updated_evidence = EvidenceService.process_uploaded_document(
+            db=db,
+            evidence_id=evidence_id,
+            tenant_id=tenant_id
+        )
+        return updated_evidence
+    except Exception as e:
+        logger.error(f"Error retrying processing for {evidence_id}: {e}")
+        EvidenceService.update_evidence_status(db, evidence_id, tenant_id, "failed")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.post("/", response_model=EvidenceRead, status_code=status.HTTP_201_CREATED)
 def create_evidence(
     evidence: EvidenceInitRequest,

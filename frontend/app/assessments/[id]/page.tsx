@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield, Upload, FileText, Download, X, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield, Upload, FileText, Download, X, Check, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { LoadingPage } from '../../../components/LoadingSpinner';
 import { Alert } from '../../../components/Alert';
@@ -241,11 +241,17 @@ export default function AssessmentDetailPage() {
         // Step 1: Get presigned URL from backend
         const initResponse = await apiClient.initiateUpload(assessmentId, file);
 
-        // Step 2: Upload directly to S3
-        await apiClient.uploadToS3(initResponse.upload_url, initResponse.upload_fields, file);
+        try {
+          // Step 2: Upload directly to S3
+          await apiClient.uploadToS3(initResponse.upload_url, initResponse.upload_fields, file);
 
-        // Step 3: Tell backend upload is complete → triggers parsing
-        await apiClient.completeUpload(initResponse.evidence_id);
+          // Step 3: Tell backend upload is complete → triggers parsing
+          await apiClient.completeUpload(initResponse.evidence_id);
+        } catch (uploadErr) {
+          // Clean up the orphaned evidence record so it doesn't stay as "processing"
+          try { await apiClient.deleteEvidence(initResponse.evidence_id); } catch (_) {}
+          throw uploadErr;
+        }
       }
 
       // Reload evidence list
@@ -283,6 +289,16 @@ export default function AssessmentDetailPage() {
       link.click();
     } catch (err: any) {
       setError('Failed to get download link');
+    }
+  };
+
+  const handleRetryEvidence = async (evidenceId: string) => {
+    try {
+      await apiClient.retryEvidence(evidenceId);
+      await loadAssessmentData();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || 'Retry failed. You may need to delete and re-upload.';
+      setUploadError(msg);
     }
   };
 
@@ -541,6 +557,15 @@ export default function AssessmentDetailPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 ml-2">
+                  {(ev.status === 'processing' || ev.status === 'failed') && (
+                    <button
+                      onClick={() => handleRetryEvidence(ev.id)}
+                      className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
+                      title="Retry processing"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  )}
                   {ev.status === 'ready' && (
                     <button
                       onClick={() => handleDownloadEvidence(ev.id)}

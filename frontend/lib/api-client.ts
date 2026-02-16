@@ -196,6 +196,11 @@ class APIClient {
     return data;
   }
 
+  async retryEvidence(evidenceId: string): Promise<Evidence> {
+    const { data } = await this.client.post(`/evidence/${evidenceId}/retry`, {});
+    return data;
+  }
+
   async getDownloadUrl(evidenceId: string): Promise<{ download_url: string; file_name: string }> {
     const { data } = await this.client.get(`/evidence/download/${evidenceId}`);
     return data;
