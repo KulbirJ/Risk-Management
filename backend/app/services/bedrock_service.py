@@ -201,7 +201,8 @@ class BedrockService:
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        response_schema: Optional[Dict[str, Any]] = None
+        response_schema: Optional[Dict[str, Any]] = None,
+        max_tokens: Optional[int] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Generate structured JSON output from the model.
@@ -210,6 +211,7 @@ class BedrockService:
             prompt: User prompt
             system_prompt: System instructions
             response_schema: Expected JSON schema (for validation)
+            max_tokens: Override max tokens for this call
             
         Returns:
             Parsed JSON dict or None if failed
@@ -218,7 +220,7 @@ class BedrockService:
         json_instruction = "\n\nRespond with valid JSON only, no other text."
         full_prompt = prompt + json_instruction
         
-        response_text = self.invoke_model(full_prompt, system_prompt)
+        response_text = self.invoke_model(full_prompt, system_prompt, max_tokens=max_tokens)
         
         if not response_text:
             return None
@@ -245,8 +247,52 @@ class BedrockService:
             return parsed
             
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response: {e}")
+            logger.warning(f"JSON parse failed, attempting truncated recovery: {e}")
+            # Try to recover partial JSON (output was likely truncated by max_tokens)
+            recovered = self._recover_truncated_json(response_text)
+            if recovered:
+                logger.info(f"Recovered {len(recovered.get('findings', []))} findings from truncated response")
+                return recovered
+            logger.error(f"Could not recover truncated JSON")
             logger.debug(f"Raw response: {response_text[:500]}")
+            return None
+
+    def _recover_truncated_json(self, text: str) -> Optional[Dict[str, Any]]:
+        """Attempt to recover findings from truncated JSON output."""
+        import re
+        try:
+            # Find all complete finding objects in the truncated text
+            # Look for complete JSON objects within the findings array
+            findings = []
+            # Find everything after "findings": [
+            match = re.search(r'"findings"\s*:\s*\[', text)
+            if not match:
+                return None
+            
+            array_start = match.end()
+            # Find each complete {...} block
+            depth = 0
+            obj_start = None
+            for i in range(array_start, len(text)):
+                if text[i] == '{':
+                    if depth == 0:
+                        obj_start = i
+                    depth += 1
+                elif text[i] == '}':
+                    depth -= 1
+                    if depth == 0 and obj_start is not None:
+                        try:
+                            obj = json.loads(text[obj_start:i+1])
+                            findings.append(obj)
+                        except json.JSONDecodeError:
+                            pass
+                        obj_start = None
+            
+            if findings:
+                return {"findings": findings}
+            return None
+        except Exception as e:
+            logger.error(f"Recovery failed: {e}")
             return None
 
     def _validate_schema(self, data: Dict[str, Any], schema: Dict[str, Any]) -> bool:

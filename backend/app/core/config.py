@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     bedrock_model_id: str = "amazon.nova-pro-v1:0"
     bedrock_fallback_model_id: str = "anthropic.claude-3-haiku-20240307-v1:0"
     bedrock_region: str = "us-east-1"
-    bedrock_max_tokens: int = 4000
+    bedrock_max_tokens: int = 8000
     bedrock_temperature: float = 0.3
     intelligence_confidence_threshold: float = 0.7
     openai_api_key: Optional[str] = None

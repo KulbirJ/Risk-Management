@@ -78,6 +78,12 @@ class IntelligenceService:
         new_evidence = [e for e in evidence_docs if e.last_enriched_at is None]
         old_evidence = [e for e in evidence_docs if e.last_enriched_at is not None]
 
+        # If ALL files have been previously enriched (no new files), treat them
+        # all as new so the AI does a full re-analysis when user clicks enrich
+        if not new_evidence and old_evidence:
+            new_evidence = old_evidence
+            old_evidence = []
+
         # Build context: prioritize new evidence but include old for full picture
         evidence_context = self._build_evidence_context(new_evidence, old_evidence)
 
@@ -279,7 +285,8 @@ The following evidence has been uploaded for this assessment. Use this informati
 
         response = self.bedrock.generate_structured_output(
             prompt=prompt,
-            system_prompt=system_prompt
+            system_prompt=system_prompt,
+            max_tokens=16000  # Large enough for up to 50 findings
         )
 
         if not response:
