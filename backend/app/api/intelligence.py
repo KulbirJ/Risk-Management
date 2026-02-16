@@ -75,7 +75,7 @@ def enrich_assessment(
         )
 
     # Auto-expire stuck jobs older than 5 minutes
-    stuck_cutoff = datetime.utcnow() - timedelta(minutes=5)
+    stuck_cutoff = datetime.utcnow() - timedelta(minutes=1)
     stuck_jobs = db.query(IntelligenceJob).filter(
         IntelligenceJob.assessment_id == request.assessment_id,
         IntelligenceJob.status.in_(["pending", "running"]),
@@ -83,7 +83,7 @@ def enrich_assessment(
     ).all()
     for sj in stuck_jobs:
         sj.status = "failed"
-        sj.error_message = "Auto-expired: job exceeded 5 minute timeout"
+        sj.error_message = "Auto-expired: job exceeded timeout"
         sj.completed_at = datetime.utcnow()
     if stuck_jobs:
         db.commit()

@@ -98,8 +98,31 @@ export function IntelligencePanel({ assessmentId, onEnrichComplete }: Intelligen
       // Refresh last job
       await loadLastJob();
     } catch (err: any) {
+      const status = err.response?.status;
       const detail = err.response?.data?.detail || 'Failed to start AI enrichment';
-      setError(detail);
+      
+      // If 409 conflict (stuck job), auto-reset and retry once
+      if (status === 409) {
+        try {
+          await apiClient.resetIntelligenceJobs(assessmentId);
+          const retryResult = await apiClient.enrichAssessment(assessmentId);
+          setEnrichResult(retryResult);
+          if (retryResult.status === 'completed') {
+            setSuccess(
+              `AI analysis complete: ${retryResult.threats_mapped} threats, ${retryResult.risks_created} risks, ${retryResult.recommendations_generated} recommendations identified.`
+            );
+            onEnrichComplete();
+          } else if (retryResult.status === 'failed') {
+            setError(`Enrichment failed: ${retryResult.errors?.join(', ') || 'Unknown error'}`);
+          }
+          await loadLastJob();
+          return;
+        } catch (retryErr: any) {
+          setError(retryErr.response?.data?.detail || 'Failed after auto-reset. Try again.');
+        }
+      } else {
+        setError(detail);
+      }
     } finally {
       setEnriching(false);
     }
