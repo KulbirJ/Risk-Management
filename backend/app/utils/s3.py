@@ -11,12 +11,14 @@ logger = logging.getLogger(__name__)
 
 
 def _get_s3_client():
-    """Get S3 client, using explicit creds if available, otherwise IAM role."""
-    kwargs = {"region_name": settings.s3_bucket_region}
-    if settings.aws_access_key_id and settings.aws_secret_access_key:
-        kwargs["aws_access_key_id"] = settings.aws_access_key_id
-        kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
-    return boto3.client('s3', **kwargs)
+    """Get S3 client using boto3 default credential chain.
+    
+    In Lambda, boto3 automatically uses the execution role's temporary
+    credentials (access key + secret + session token) from the environment.
+    Do NOT pass explicit credentials — that omits the session token and
+    causes InvalidAccessKeyId errors.
+    """
+    return boto3.client('s3', region_name=settings.s3_bucket_region)
 
 
 # Lazy-init S3 client
