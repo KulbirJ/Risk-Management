@@ -29,15 +29,18 @@ dependencies = [
     "requests==2.31.0",
     "pytz==2023.3",
     "mangum==0.17.0",
-    # Document parsing
+    # Lightweight document parsing (kept in core for Lambda size)
     "PyPDF2>=3.0.0",
-    "pdfplumber>=0.10.0",
     "python-docx>=1.1.0",
     "openpyxl>=3.1.0",
-    "Pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]
+parsers = [
+    # Heavier parsing libs - install locally or in Lambda layer
+    "pdfplumber>=0.10.0",
+    "Pillow>=10.0.0",
+]
 dev = [
     "pytest==7.4.3",
     "pytest-asyncio==0.21.1",

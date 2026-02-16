@@ -37,21 +37,50 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Install all dependencies including the project itself for Linux x86_64 (Lambda runtime)
-          pip install --platform manylinux2014_x86_64 --only-binary=:all: --target ./lambda-package .[dev] || pip install --target ./lambda-package .
+          # Install all dependencies for Linux x86_64 (Lambda runtime)
+          pip install --platform manylinux2014_x86_64 --only-binary=:all: --target ./lambda-package . || pip install --target ./lambda-package .
           cp -r backend/app ./lambda-package/
       
       - name: Create deployment package
         run: |
           cd lambda-package
+          # Remove unnecessary files to reduce package size
+          find . -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+          find . -type d -name 'tests' -exec rm -rf {} + 2>/dev/null || true
+          find . -type d -name 'test' -exec rm -rf {} + 2>/dev/null || true
+          find . -type f -name '*.pyc' -delete 2>/dev/null || true
+          find . -type f -name '*.pyo' -delete 2>/dev/null || true
+          find . -type d -name '*.dist-info' -exec rm -rf {} + 2>/dev/null || true
+          find . -type d -name '*.egg-info' -exec rm -rf {} + 2>/dev/null || true
+          # Lambda runtime already includes boto3/botocore - remove to save ~60MB
+          rm -rf boto3 botocore s3transfer 2>/dev/null || true
+          # Remove other packages not needed in Lambda
+          rm -rf uvicorn 2>/dev/null || true
+          rm -rf docutils 2>/dev/null || true
+          rm -rf setuptools pip _distutils_hack pkg_resources 2>/dev/null || true
+          rm -rf jmespath/compat.py 2>/dev/null || true
           zip -r ../lambda-deployment.zip . -x '*.pyc' -x '__pycache__/*'
+          echo "Package size: $(du -sh ../lambda-deployment.zip | cut -f1)"
       
-      - name: Deploy to Lambda
+      - name: Deploy to Lambda via S3
         run: |
+          S3_BUCKET="compliance-platform-evidence-dev"
+          S3_KEY="lambda-deployments/lambda-deployment-${{ github.sha }}.zip"
+          
+          echo "Uploading deployment package to s3://${S3_BUCKET}/${S3_KEY}..."
+          aws s3 cp lambda-deployment.zip "s3://${S3_BUCKET}/${S3_KEY}" --region ${{ env.AWS_REGION }}
+          
+          echo "Deploying Lambda from S3..."
           aws lambda update-function-code \
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
-            --zip-file fileb://lambda-deployment.zip \
+            --s3-bucket "${S3_BUCKET}" \
+            --s3-key "${S3_KEY}" \
             --region ${{ env.AWS_REGION }}
+          
+          echo "Cleaning up old deployments (keep last 3)..."
+          aws s3 ls "s3://${S3_BUCKET}/lambda-deployments/" --region ${{ env.AWS_REGION }} | \
+            sort -r | tail -n +4 | awk '{print $4}' | \
+            xargs -I {} aws s3 rm "s3://${S3_BUCKET}/lambda-deployments/{}" --region ${{ env.AWS_REGION }} 2>/dev/null || true
       
       - name: Wait for Lambda update
         run: |
