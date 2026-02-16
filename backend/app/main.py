@@ -289,6 +289,40 @@ def create_app() -> FastAPI:
         finally:
             db.close()
     
+    # One-time S3 CORS configuration endpoint
+    @app.post("/configure-s3-cors")
+    async def configure_s3_cors():
+        """Set CORS policy on the evidence S3 bucket to allow browser uploads."""
+        import boto3
+        from botocore.exceptions import ClientError
+        try:
+            kwargs = {"region_name": settings.s3_bucket_region}
+            if settings.aws_access_key_id and settings.aws_secret_access_key:
+                kwargs["aws_access_key_id"] = settings.aws_access_key_id
+                kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
+            s3 = boto3.client("s3", **kwargs)
+
+            cors_config = {
+                "CORSRules": [
+                    {
+                        "AllowedHeaders": ["*"],
+                        "AllowedMethods": ["GET", "POST", "PUT", "HEAD"],
+                        "AllowedOrigins": ["*"],
+                        "ExposeHeaders": ["ETag", "x-amz-request-id"],
+                        "MaxAgeSeconds": 3600,
+                    }
+                ]
+            }
+            s3.put_bucket_cors(
+                Bucket=settings.s3_bucket_evidence,
+                CORSConfiguration=cors_config,
+            )
+            return {"status": "success", "message": f"CORS configured on {settings.s3_bucket_evidence}"}
+        except ClientError as e:
+            return {"status": "error", "message": str(e)}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     # Include API routers
     from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence
     

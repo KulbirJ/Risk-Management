@@ -1,7 +1,7 @@
 """Evidence API router endpoints."""
 from uuid import UUID, uuid4
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, UploadFile, File as FastAPIFile, Form, status
 from sqlalchemy.orm import Session
 import logging
 
@@ -14,7 +14,9 @@ from ..utils.s3 import (
     generate_presigned_download_url,
     verify_s3_upload,
     delete_evidence_from_s3,
+    get_s3_client,
 )
+from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -111,6 +113,33 @@ def complete_upload(
         logger.error(f"Error completing upload for {evidence_id}: {e}")
         # Mark as failed if processing errors
         EvidenceService.update_evidence_status(db, evidence_id, tenant_id, "failed")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/proxy-upload")
+async def proxy_upload(
+    file: UploadFile = FastAPIFile(...),
+    s3_key: str = Form(...),
+    content_type: str = Form("application/octet-stream"),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context)
+):
+    """
+    Proxy upload: client sends file to backend, backend uploads to S3.
+    Used as fallback when direct S3 upload fails due to CORS or network issues.
+    Limited by API Gateway / Lambda payload limits (~6MB).
+    """
+    try:
+        file_bytes = await file.read()
+        s3 = get_s3_client()
+        s3.put_object(
+            Bucket=settings.s3_bucket_evidence,
+            Key=s3_key,
+            Body=file_bytes,
+            ContentType=content_type,
+        )
+        return {"status": "uploaded", "s3_key": s3_key, "size": len(file_bytes)}
+    except Exception as e:
+        logger.error(f"Proxy upload failed: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 

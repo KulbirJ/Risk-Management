@@ -161,10 +161,34 @@ class APIClient {
     });
     formData.append('file', file);
 
-    await fetch(uploadUrl, {
-      method: 'POST',
-      body: formData,
-    });
+    let response: Response;
+    try {
+      response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+        mode: 'cors',
+      });
+    } catch (networkErr) {
+      // CORS or network error – fall back to proxy upload through backend
+      console.warn('Direct S3 upload failed, using proxy:', networkErr);
+      const proxyForm = new FormData();
+      proxyForm.append('file', file);
+      proxyForm.append('s3_key', uploadFields['key'] || '');
+      proxyForm.append('content_type', file.type || 'application/octet-stream');
+      const proxyResp = await this.client.post('/evidence/proxy-upload', proxyForm, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        maxBodyLength: 10 * 1024 * 1024,
+      });
+      if (proxyResp.status >= 400) {
+        throw new Error(`Proxy upload failed: ${proxyResp.statusText}`);
+      }
+      return;
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`S3 upload failed (${response.status}): ${text}`);
+    }
   }
 
   async completeUpload(evidenceId: string): Promise<Evidence> {
