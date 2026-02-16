@@ -210,9 +210,9 @@ class IntelligenceService:
         system_prompt = f"""You are a cybersecurity risk assessment expert. Analyze the assessment and produce a comprehensive security analysis in a SINGLE response.
 
 You MUST return valid JSON with this exact structure:
-{
+{{
   "findings": [
-    {
+    {{
       "vulnerability": "Brief vulnerability title",
       "description": "What the vulnerability is and why it matters",
       "severity": "critical|high|medium|low",
@@ -224,9 +224,9 @@ You MUST return valid JSON with this exact structure:
         "Specific actionable mitigation step 1",
         "Specific actionable mitigation step 2"
       ]
-    }
+    }}
   ]
-}
+}}
 
 Rules:
 - Return 3-{max_findings} findings maximum
