@@ -223,7 +223,10 @@ class BedrockService:
         response_text = self.invoke_model(full_prompt, system_prompt, max_tokens=max_tokens)
         
         if not response_text:
+            logger.warning(f"invoke_model returned no text (enabled={self.enabled}, client={'yes' if self.client else 'no'})")
             return None
+        
+        logger.info(f"Bedrock raw response length: {len(response_text)} chars")
         
         try:
             # Try to extract JSON from response (handle markdown code blocks)

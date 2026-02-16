@@ -7,7 +7,7 @@ import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from sqlalchemy.orm import Session
-from ..models.models import Assessment, Threat, ActiveRisk, Recommendation, ThreatCatalogue, Evidence
+from ..models.models import Assessment, Threat, Recommendation, ThreatCatalogue, Evidence
 from ..services.bedrock_service import bedrock_service
 from ..core.config import settings
 from datetime import datetime
@@ -93,22 +93,36 @@ class IntelligenceService:
         # Max 50 findings
         max_findings = 50
 
+        # Guard: if no evidence with extracted text exists, report it
+        if not evidence_docs:
+            logger.warning(f"No ready evidence with extracted text for assessment {assessment_id}")
+            results["status"] = "completed_no_findings"
+            results["errors"].append("No evidence documents with extracted text found. Upload and process evidence files first.")
+            return results
+
         try:
             # SINGLE Bedrock call for the entire analysis
             ai_results = self._run_comprehensive_analysis(assessment, catalogue_summary, evidence_context, max_findings, file_manifest)
 
-            if not ai_results:
+            if ai_results is None:
+                logger.warning(f"Bedrock returned no results for assessment {assessment_id}")
                 results["status"] = "completed_no_findings"
+                results["errors"].append("AI model returned no response. This may be a temporary issue — try again.")
                 return results
 
             findings = ai_results.get("findings", [])
             results["vulnerabilities_identified"] = len(findings)
 
             if not findings:
+                logger.warning(f"AI returned response but with empty findings array for assessment {assessment_id}")
                 results["status"] = "completed_no_findings"
+                results["errors"].append("AI analysis completed but produced no findings. Try re-running enrichment.")
                 return results
 
             # Process each finding and create DB records
+            # NOTE: We only create Threat + Recommendation records here.
+            # ActiveRisk entries are created by the user when they change
+            # a threat's status to "at_risk" in the frontend.
             for finding in findings:
                 try:
                     # Match to catalogue threat
@@ -136,42 +150,14 @@ class IntelligenceService:
                     db.flush()
                     results["threats_mapped"] += 1
 
-                    # Calculate scores from AI output
-                    likelihood = min(max(int(finding.get("likelihood", 5)), 1), 10)
-                    impact = min(max(int(finding.get("impact", 5)), 1), 10)
-                    risk_score = min(max(likelihood * impact, 1), 100)
-
-                    # Create ActiveRisk
-                    risk_title = f"{vuln_title} - {cat_threat.name if cat_threat else 'Risk'}"
-                    active_risk = ActiveRisk(
-                        tenant_id=assessment.tenant_id,
-                        assessment_id=assessment.id,
-                        threat_id=threat.id,
-                        title=risk_title[:255],
-                        risk_score=risk_score,
-                        likelihood=likelihood,
-                        impact=impact,
-                        residual_risk=self._residual_from_score(risk_score),
-                        status="open",
-                        detected_by="ai_intelligence",
-                        ai_rationale=finding.get("justification", ""),
-                        extra_data={
-                            "ai_generated": True,
-                            "model": settings.bedrock_model_id,
-                            "severity": severity
-                        }
-                    )
-                    db.add(active_risk)
-                    db.flush()
-                    results["risks_created"] += 1
-
-                    # Create Recommendations from AI output
+                    # Create Recommendations linked to the threat (not to an ActiveRisk)
                     for rec in finding.get("recommendations", [])[:3]:
                         rec_title = rec if isinstance(rec, str) else rec.get("title", "Mitigation")
                         rec_desc = rec if isinstance(rec, str) else rec.get("description", rec.get("title", ""))
                         recommendation = Recommendation(
                             tenant_id=assessment.tenant_id,
-                            active_risk_id=active_risk.id,
+                            assessment_id=assessment.id,
+                            threat_id=threat.id,
                             title=str(rec_title)[:255],
                             description=str(rec_desc),
                             text=str(rec_desc),
@@ -283,6 +269,8 @@ The following evidence has been uploaded for this assessment. Use this informati
 
         prompt += "\n\nAnalyze this assessment and ALL evidence files. Return the comprehensive JSON analysis with findings from EVERY file."
 
+        logger.info(f"Calling Bedrock for assessment {assessment.id} (prompt length: {len(prompt)} chars, system prompt: {len(system_prompt)} chars)")
+
         response = self.bedrock.generate_structured_output(
             prompt=prompt,
             system_prompt=system_prompt,
@@ -290,16 +278,20 @@ The following evidence has been uploaded for this assessment. Use this informati
         )
 
         if not response:
-            logger.warning("No response from Bedrock")
+            logger.warning(f"No response from Bedrock for assessment {assessment.id}. "
+                          f"Bedrock enabled: {self.bedrock.enabled}, client initialized: {self.bedrock.client is not None}")
             return None
 
         # Handle various response formats
         if isinstance(response, dict):
+            findings_count = len(response.get("findings", []))
+            logger.info(f"Bedrock returned dict with {findings_count} findings for assessment {assessment.id}")
             return response
         elif isinstance(response, list):
+            logger.info(f"Bedrock returned list with {len(response)} items for assessment {assessment.id}")
             return {"findings": response}
 
-        logger.warning(f"Unexpected response format: {type(response)}")
+        logger.warning(f"Unexpected response format from Bedrock: {type(response)}")
         return None
 
     def _build_file_manifest(self, new_evidence: list, old_evidence: Optional[list] = None) -> str:

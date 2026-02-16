@@ -77,6 +77,9 @@ class AssessmentService:
         
         if status:
             query = query.filter(Assessment.status == status)
+        else:
+            # By default, exclude archived assessments
+            query = query.filter(Assessment.status != "archived")
         
         if owner_user_id:
             query = query.filter(Assessment.owner_user_id == owner_user_id)

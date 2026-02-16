@@ -122,7 +122,7 @@ export default function AssessmentDetailPage() {
 
     try {
       await apiClient.deleteAssessment(assessmentId);
-      router.push('/assessments');
+      router.replace('/assessments');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to delete assessment');
     }
