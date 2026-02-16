@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield, Upload, FileText, Download, X, Check, Loader2 } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { LoadingPage } from '../../../components/LoadingSpinner';
 import { Alert } from '../../../components/Alert';
@@ -11,7 +11,7 @@ import { StatusBadge, SeverityBadge } from '../../../components/Badge';
 import { ThreatModal, ThreatFormData } from '../../../components/ThreatModal';
 import { IntelligencePanel, AiBadge } from '../../../components/IntelligencePanel';
 import apiClient from '../../../lib/api-client';
-import { Assessment, Threat, ActiveRisk, Recommendation } from '../../../lib/types';
+import { Assessment, Threat, ActiveRisk, Recommendation, Evidence } from '../../../lib/types';
 import { format } from 'date-fns';
 
 export default function AssessmentDetailPage() {
@@ -38,6 +38,27 @@ export default function AssessmentDetailPage() {
   });
   const [editSaving, setEditSaving] = useState(false);
 
+  // Evidence / Upload state
+  const [evidenceList, setEvidenceList] = useState<Evidence[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const ALLOWED_TYPES = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+    'text/csv',
+    'application/json',
+    'application/xml',
+    'text/xml',
+    'text/plain',
+    'image/png',
+    'image/jpeg',
+  ];
+  const MAX_SIZE_MB = 10;
+
   useEffect(() => {
     loadAssessmentData();
   }, [assessmentId]);
@@ -47,17 +68,19 @@ export default function AssessmentDetailPage() {
       setLoading(true);
       setError(null);
 
-      const [assessmentData, threatsData, recommendationsData, activeRisksData] = await Promise.all([
+      const [assessmentData, threatsData, recommendationsData, activeRisksData, evidenceData] = await Promise.all([
         apiClient.getAssessment(assessmentId),
         apiClient.getThreats(assessmentId),
         apiClient.getRecommendations({ assessment_id: assessmentId }).catch(() => []),
         apiClient.getActiveRisks({ assessment_id: assessmentId }).catch(() => []),
+        apiClient.getEvidence({ assessment_id: assessmentId }).catch(() => []),
       ]);
 
       setAssessment(assessmentData);
       setThreats(threatsData);
       setRecommendations(recommendationsData);
       setActiveRisks(activeRisksData);
+      setEvidenceList(evidenceData);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load assessment');
     } finally {
@@ -198,6 +221,93 @@ export default function AssessmentDetailPage() {
   const closeModal = () => {
     setIsThreatModalOpen(false);
     setEditingThreat(null);
+  };
+
+  // === Evidence Upload Handlers ===
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    setUploadError(null);
+    setIsUploading(true);
+
+    try {
+      for (const file of Array.from(files)) {
+        // Validate file size
+        if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+          setUploadError(`File "${file.name}" exceeds ${MAX_SIZE_MB}MB limit`);
+          continue;
+        }
+
+        // Step 1: Get presigned URL from backend
+        const initResponse = await apiClient.initiateUpload(assessmentId, file);
+
+        // Step 2: Upload directly to S3
+        await apiClient.uploadToS3(initResponse.upload_url, initResponse.upload_fields, file);
+
+        // Step 3: Tell backend upload is complete → triggers parsing
+        await apiClient.completeUpload(initResponse.evidence_id);
+      }
+
+      // Reload evidence list
+      await loadAssessmentData();
+    } catch (err: any) {
+      console.error('Upload failed:', err);
+      setUploadError(err.response?.data?.detail || err.message || 'Upload failed');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    handleFileUpload(e.dataTransfer.files);
+  };
+
+  const handleDeleteEvidence = async (evidenceId: string) => {
+    if (!confirm('Delete this file?')) return;
+    try {
+      await apiClient.deleteEvidence(evidenceId);
+      await loadAssessmentData();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to delete file');
+    }
+  };
+
+  const handleDownloadEvidence = async (evidenceId: string) => {
+    try {
+      const { download_url, file_name } = await apiClient.getDownloadUrl(evidenceId);
+      const link = document.createElement('a');
+      link.href = download_url;
+      link.download = file_name;
+      link.click();
+    } catch (err: any) {
+      setError('Failed to get download link');
+    }
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return 'Unknown size';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getDocTypeLabel = (type?: string) => {
+    const labels: Record<string, string> = {
+      vulnerability_scan: 'Vuln Scan',
+      architecture_doc: 'Architecture',
+      policy: 'Policy',
+      config: 'Config',
+      other: 'Document',
+    };
+    return labels[type || 'other'] || type || 'Document';
+  };
+
+  const getStatusIcon = (status: string) => {
+    if (status === 'processing') return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />;
+    if (status === 'ready') return <Check className="w-4 h-4 text-green-500" />;
+    return <X className="w-4 h-4 text-red-500" />;
   };
 
   if (loading) {
@@ -352,6 +462,113 @@ export default function AssessmentDetailPage() {
         assessmentId={assessmentId}
         onEnrichComplete={loadAssessmentData}
       />
+
+      {/* Evidence & Documents Upload Section */}
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <FileText className="w-5 h-5 text-blue-500" />
+          Evidence & Documents ({evidenceList.length})
+        </h2>
+
+        {/* Drop Zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors mb-4 ${
+            dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-white'
+          }`}
+        >
+          <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+          <p className="text-sm text-gray-600 mb-2">
+            Drag & drop files here, or{' '}
+            <label className="text-blue-600 hover:underline cursor-pointer">
+              browse
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                accept=".pdf,.docx,.xlsx,.xls,.csv,.json,.xml,.txt,.md,.log,.png,.jpg,.jpeg"
+                onChange={(e) => handleFileUpload(e.target.files)}
+                disabled={isUploading}
+              />
+            </label>
+          </p>
+          <p className="text-xs text-gray-400">
+            PDF, DOCX, XLSX, CSV, JSON, XML, TXT, images — max {MAX_SIZE_MB}MB per file
+          </p>
+          {isUploading && (
+            <div className="flex items-center justify-center gap-2 mt-3 text-blue-600">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">Uploading & processing...</span>
+            </div>
+          )}
+          {uploadError && (
+            <p className="text-sm text-red-600 mt-2">{uploadError}</p>
+          )}
+        </div>
+
+        {/* Evidence List */}
+        {evidenceList.length > 0 && (
+          <div className="space-y-2">
+            {evidenceList.map((ev) => (
+              <div
+                key={ev.id}
+                className="bg-white rounded-lg border border-gray-200 p-4 flex items-center justify-between hover:shadow-sm transition-shadow"
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {getStatusIcon(ev.status)}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{ev.file_name}</p>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded font-medium">
+                        {getDocTypeLabel(ev.document_type)}
+                      </span>
+                      <span>{formatFileSize(ev.size_bytes)}</span>
+                      <span>{format(new Date(ev.created_at), 'MMM d, yyyy')}</span>
+                      {ev.status === 'ready' && ev.extracted_text && (
+                        <span className="text-green-600">
+                          {ev.extracted_text.length.toLocaleString()} chars extracted
+                        </span>
+                      )}
+                      {ev.status === 'failed' && (
+                        <span className="text-red-600">Processing failed</span>
+                      )}
+                      {ev.status === 'processing' && (
+                        <span className="text-blue-600">Processing...</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 ml-2">
+                  {ev.status === 'ready' && (
+                    <button
+                      onClick={() => handleDownloadEvidence(ev.id)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                      title="Download"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDeleteEvidence(ev.id)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {evidenceList.length === 0 && (
+          <p className="text-sm text-gray-500 text-center py-2">
+            Upload vulnerability scans, architecture docs, or other evidence to improve AI threat analysis.
+          </p>
+        )}
+      </div>
 
       {/* Recommendations from AI */}
       {recommendations.length > 0 && (

@@ -4,6 +4,7 @@ import type {
   ActiveRisk, 
   Threat, 
   Evidence, 
+  EvidenceInitResponse,
   AuditLog, 
   Recommendation,
   IntelligenceEnrichRequest,
@@ -140,8 +141,39 @@ class APIClient {
     return data;
   }
 
-  async createEvidence(payload: Partial<Evidence>): Promise<Evidence> {
-    const { data } = await this.client.post('/evidence', payload);
+  async initiateUpload(assessmentId: string, file: File, documentType?: string): Promise<EvidenceInitResponse> {
+    const payload = {
+      file_name: file.name,
+      content_type: file.type || 'application/octet-stream',
+      size_bytes: file.size,
+      document_type: documentType || 'other',
+    };
+    const { data } = await this.client.post('/evidence/initiate', payload, {
+      params: { assessment_id: assessmentId },
+    });
+    return data;
+  }
+
+  async uploadToS3(uploadUrl: string, uploadFields: Record<string, string>, file: File): Promise<void> {
+    const formData = new FormData();
+    Object.entries(uploadFields).forEach(([key, value]) => {
+      formData.append(key, value);
+    });
+    formData.append('file', file);
+
+    await fetch(uploadUrl, {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  async completeUpload(evidenceId: string): Promise<Evidence> {
+    const { data } = await this.client.post(`/evidence/${evidenceId}/complete`, {});
+    return data;
+  }
+
+  async getDownloadUrl(evidenceId: string): Promise<{ download_url: string; file_name: string }> {
+    const { data } = await this.client.get(`/evidence/download/${evidenceId}`);
     return data;
   }
 

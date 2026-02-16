@@ -174,9 +174,10 @@ def create_app() -> FastAPI:
                 ("evidence", "file_name", "VARCHAR(255)"),
                 ("evidence", "mime_type", "VARCHAR(100)"),
                 ("evidence", "size_bytes", "INTEGER"),
-                ("evidence", "status", "VARCHAR(50) DEFAULT 'ready'"),
+                ("evidence", "status", "VARCHAR(50) DEFAULT 'processing'"),
                 ("evidence", "extracted_text", "TEXT"),
                 ("evidence", "extract_metadata", "JSONB"),
+                ("evidence", "document_type", "VARCHAR(50)"),
                 ("evidence", "quality", "VARCHAR(20) DEFAULT 'medium'"),
                 ("evidence", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 

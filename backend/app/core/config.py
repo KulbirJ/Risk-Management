@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     s3_bucket_evidence: str = "compliance-platform-evidence-dev"
     s3_bucket_region: str = "ca-west-1"
 
+    # AWS Credentials (optional - uses IAM role in Lambda)
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
+
     # Cognito / Auth
     cognito_user_pool_id: str = ""
     cognito_client_id: str = ""
@@ -71,8 +75,9 @@ class Settings(BaseSettings):
         return self.allowed_origins
 
     # File Upload
-    max_upload_size_mb: int = 500
+    max_upload_size_mb: int = 10
     evidence_retention_days: int = 365
+    allowed_upload_types: str = "application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/json,application/xml,text/xml,text/plain,image/png,image/jpeg,image/gif,image/webp"
 
     # Intelligence Layer / AI
     bedrock_enabled: bool = True

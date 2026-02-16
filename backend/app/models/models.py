@@ -117,9 +117,10 @@ class Evidence(Base):
     file_name = Column(String(255), nullable=False)
     mime_type = Column(String(100), nullable=False)
     size_bytes = Column(Integer, nullable=True)
-    status = Column(String(50), default="ready")  # processing, ready, failed (Phase 1: for Textract jobs)
-    extracted_text = Column(Text, nullable=True)  # (Phase 1: from Textract)
-    extract_metadata = Column(JSONB, nullable=True)  # (Phase 1: Textract/OCR metadata)
+    status = Column(String(50), default="processing")  # processing, ready, failed
+    extracted_text = Column(Text, nullable=True)  # Extracted text content from document
+    extract_metadata = Column(JSONB, nullable=True)  # Parsing metadata (page count, etc.)
+    document_type = Column(String(50), nullable=True)  # vulnerability_scan, architecture_doc, policy, other
     quality = Column(String(20), default="medium")  # high, medium, low
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 

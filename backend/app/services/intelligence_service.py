@@ -7,7 +7,7 @@ import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from sqlalchemy.orm import Session
-from ..models.models import Assessment, Threat, ActiveRisk, Recommendation, ThreatCatalogue
+from ..models.models import Assessment, Threat, ActiveRisk, Recommendation, ThreatCatalogue, Evidence
 from ..services.bedrock_service import bedrock_service
 from ..core.config import settings
 
@@ -65,9 +65,19 @@ class IntelligenceService:
         # Build catalogue lookup
         catalogue_map = {t.catalogue_key: t for t in catalogue_threats}
 
+        # Fetch uploaded evidence with extracted text for this assessment
+        evidence_docs = db.query(Evidence).filter(
+            Evidence.assessment_id == assessment_id,
+            Evidence.tenant_id == tenant_id,
+            Evidence.status == "ready",
+            Evidence.extracted_text.isnot(None)
+        ).order_by(Evidence.created_at.desc()).all()
+
+        evidence_context = self._build_evidence_context(evidence_docs)
+
         try:
             # SINGLE Bedrock call for the entire analysis
-            ai_results = self._run_comprehensive_analysis(assessment, catalogue_summary)
+            ai_results = self._run_comprehensive_analysis(assessment, catalogue_summary, evidence_context)
 
             if not ai_results:
                 results["status"] = "completed_no_findings"
@@ -175,7 +185,8 @@ class IntelligenceService:
     def _run_comprehensive_analysis(
         self,
         assessment: Assessment,
-        catalogue_summary: str
+        catalogue_summary: str,
+        evidence_context: str = ""
     ) -> Optional[Dict[str, Any]]:
         """Run a single comprehensive AI analysis covering vulns, threats, risks, and recommendations."""
 
@@ -206,7 +217,8 @@ Rules:
 - catalogue_key must match one from the provided catalogue, pick the closest match
 - Each finding should have 2-3 specific recommendations
 - severity must be one of: critical, high, medium, low
-- Return ONLY the JSON object, no other text"""
+- Return ONLY the JSON object, no other text
+- If uploaded evidence (vulnerability scans, architecture docs, etc.) is provided, use that information to identify SPECIFIC, CONCRETE threats rather than generic ones. Reference specific CVEs, misconfigurations, or architectural weaknesses found in the evidence."""
 
         prompt = f"""Assessment Title: {assessment.title}
 Overall Impact: {assessment.overall_impact}
@@ -218,9 +230,19 @@ Description:
 {assessment.description or 'No description provided'}
 
 Available Threat Catalogue Keys:
-{catalogue_summary}
+{catalogue_summary}"""
 
-Analyze this assessment and return the comprehensive JSON analysis."""
+        # Append evidence context if available
+        if evidence_context:
+            prompt += f"""
+
+=== UPLOADED EVIDENCE & DOCUMENTS ===
+The following evidence has been uploaded for this assessment. Use this information to produce more specific and accurate findings:
+
+{evidence_context}
+=== END EVIDENCE ==="""
+
+        prompt += "\n\nAnalyze this assessment and return the comprehensive JSON analysis."
 
         response = self.bedrock.generate_structured_output(
             prompt=prompt,
@@ -239,6 +261,40 @@ Analyze this assessment and return the comprehensive JSON analysis."""
 
         logger.warning(f"Unexpected response format: {type(response)}")
         return None
+
+    def _build_evidence_context(self, evidence_docs: list) -> str:
+        """
+        Build a text context block from uploaded evidence documents.
+        Truncates to fit within Bedrock token limits.
+        """
+        if not evidence_docs:
+            return ""
+
+        MAX_EVIDENCE_CHARS = 15000  # Keep evidence context under ~4K tokens
+        sections = []
+        total_chars = 0
+
+        for doc in evidence_docs:
+            text = (doc.extracted_text or "").strip()
+            if not text:
+                continue
+
+            doc_type = doc.document_type or "other"
+            header = f"[{doc_type.upper()}] {doc.file_name}"
+
+            # Budget chars per document
+            remaining = MAX_EVIDENCE_CHARS - total_chars
+            if remaining <= 200:
+                sections.append(f"\n... ({len(evidence_docs) - len(sections)} more documents not included due to size limits)")
+                break
+
+            if len(text) > remaining:
+                text = text[:remaining] + f"\n... [truncated, {len(doc.extracted_text)} total chars]"
+
+            sections.append(f"--- {header} ---\n{text}")
+            total_chars += len(text) + len(header) + 10
+
+        return "\n\n".join(sections)
 
     @staticmethod
     def _residual_from_score(score: int) -> str:

@@ -29,6 +29,12 @@ dependencies = [
     "requests==2.31.0",
     "pytz==2023.3",
     "mangum==0.17.0",
+    # Document parsing
+    "PyPDF2>=3.0.0",
+    "pdfplumber>=0.10.0",
+    "python-docx>=1.1.0",
+    "openpyxl>=3.1.0",
+    "Pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]

@@ -1,7 +1,7 @@
 """S3 utilities for evidence file uploads."""
 import boto3
 from botocore.exceptions import ClientError
-from typing import Tuple
+from typing import Tuple, Optional
 from uuid import UUID, uuid4
 import logging
 
@@ -9,13 +9,25 @@ from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Initialize S3 client
-s3_client = boto3.client(
-    's3',
-    region_name=settings.aws_region,
-    aws_access_key_id=settings.aws_access_key_id,
-    aws_secret_access_key=settings.aws_secret_access_key
-) if not settings.use_secrets_manager else boto3.client('s3', region_name=settings.aws_region)
+
+def _get_s3_client():
+    """Get S3 client, using explicit creds if available, otherwise IAM role."""
+    kwargs = {"region_name": settings.s3_bucket_region}
+    if settings.aws_access_key_id and settings.aws_secret_access_key:
+        kwargs["aws_access_key_id"] = settings.aws_access_key_id
+        kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
+    return boto3.client('s3', **kwargs)
+
+
+# Lazy-init S3 client
+_s3_client: Optional[object] = None
+
+
+def get_s3_client():
+    global _s3_client
+    if _s3_client is None:
+        _s3_client = _get_s3_client()
+    return _s3_client
 
 
 def generate_evidence_s3_key(
@@ -38,27 +50,19 @@ def generate_presigned_upload_url(
     
     Returns:
         Tuple of (presigned_url, fields) for HTML form or fetch upload
-    
-    Usage (frontend):
-        const formData = new FormData();
-        Object.keys(fields).forEach(key => formData.append(key, fields[key]));
-        formData.append('file', file);
-        
-        await fetch(presigned_url, {
-            method: 'POST',
-            body: formData
-        });
     """
     try:
-        response = s3_client.generate_presigned_post(
-            Bucket=settings.s3_evidence_bucket,
+        max_size = settings.max_upload_size_mb * 1024 * 1024
+        s3 = get_s3_client()
+        response = s3.generate_presigned_post(
+            Bucket=settings.s3_bucket_evidence,
             Key=s3_key,
             Fields={
                 'Content-Type': content_type
             },
             Conditions=[
                 {'Content-Type': content_type},
-                ['content-length-range', 1, 104857600]  # 1 byte to 100 MB
+                ['content-length-range', 1, max_size]
             ],
             ExpiresIn=expiration
         )
@@ -76,15 +80,13 @@ def generate_presigned_download_url(
 ) -> str:
     """
     Generate presigned URL for downloading evidence file from S3.
-    
-    Returns:
-        presigned_url: Direct download URL valid for expiration seconds
     """
     try:
-        url = s3_client.generate_presigned_url(
+        s3 = get_s3_client()
+        url = s3.generate_presigned_url(
             'get_object',
             Params={
-                'Bucket': settings.s3_evidence_bucket,
+                'Bucket': settings.s3_bucket_evidence,
                 'Key': s3_key
             },
             ExpiresIn=expiration
@@ -100,8 +102,9 @@ def generate_presigned_download_url(
 def delete_evidence_from_s3(s3_key: str) -> bool:
     """Delete evidence file from S3."""
     try:
-        s3_client.delete_object(
-            Bucket=settings.s3_evidence_bucket,
+        s3 = get_s3_client()
+        s3.delete_object(
+            Bucket=settings.s3_bucket_evidence,
             Key=s3_key
         )
         logger.info(f"Deleted S3 object: {s3_key}")
@@ -115,10 +118,25 @@ def delete_evidence_from_s3(s3_key: str) -> bool:
 def verify_s3_upload(s3_key: str) -> bool:
     """Verify that file was successfully uploaded to S3."""
     try:
-        s3_client.head_object(
-            Bucket=settings.s3_evidence_bucket,
+        s3 = get_s3_client()
+        s3.head_object(
+            Bucket=settings.s3_bucket_evidence,
             Key=s3_key
         )
         return True
     except ClientError:
         return False
+
+
+def get_s3_object_content(s3_key: str) -> bytes:
+    """Download file content from S3."""
+    try:
+        s3 = get_s3_client()
+        response = s3.get_object(
+            Bucket=settings.s3_bucket_evidence,
+            Key=s3_key
+        )
+        return response['Body'].read()
+    except ClientError as e:
+        logger.error(f"Error reading S3 object {s3_key}: {str(e)}")
+        raise Exception(f"Failed to read file from S3: {str(e)}")

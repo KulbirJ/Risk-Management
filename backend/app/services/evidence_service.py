@@ -4,9 +4,12 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
+import logging
 
 from ..models.models import Evidence, Assessment, Threat
 from ..schemas.schemas import EvidenceInitRequest
+
+logger = logging.getLogger(__name__)
 
 
 class EvidenceService:
@@ -19,7 +22,8 @@ class EvidenceService:
         assessment_id: UUID,
         tenant_id: UUID,
         user_id: UUID,
-        s3_key: str
+        s3_key: str,
+        initial_status: str = "processing"
     ) -> Evidence:
         """Create a new evidence record."""
         # Verify assessment exists
@@ -51,7 +55,8 @@ class EvidenceService:
             file_name=evidence_data.file_name,
             mime_type=evidence_data.content_type,
             size_bytes=evidence_data.size_bytes,
-            status="ready"
+            status=initial_status,
+            document_type=getattr(evidence_data, 'document_type', None) or 'other'
         )
         
         try:
@@ -62,6 +67,95 @@ class EvidenceService:
         except SQLAlchemyError as e:
             db.rollback()
             raise Exception(f"Database error creating evidence: {str(e)}")
+
+    @staticmethod
+    def process_uploaded_document(
+        db: Session,
+        evidence_id: UUID,
+        tenant_id: UUID
+    ) -> Evidence:
+        """
+        Process an uploaded document: download from S3, extract text, update record.
+        Called after the client confirms upload is complete.
+        """
+        from ..services.document_parser import DocumentParser
+        from ..utils.s3 import get_s3_object_content
+
+        evidence = db.query(Evidence).filter(
+            Evidence.id == evidence_id,
+            Evidence.tenant_id == tenant_id
+        ).first()
+
+        if not evidence:
+            raise ValueError("Evidence not found")
+
+        try:
+            # Download file content from S3
+            file_bytes = get_s3_object_content(evidence.s3_key)
+
+            # Parse document and extract text
+            result = DocumentParser.parse(
+                file_bytes=file_bytes,
+                file_name=evidence.file_name,
+                mime_type=evidence.mime_type
+            )
+
+            evidence.extracted_text = result.get("text", "")
+            evidence.extract_metadata = result.get("metadata", {})
+            evidence.status = "ready"
+
+            # Auto-detect document type if not set
+            if not evidence.document_type or evidence.document_type == "other":
+                evidence.document_type = DocumentParser.detect_document_type(
+                    text=evidence.extracted_text,
+                    file_name=evidence.file_name
+                )
+
+            db.commit()
+            db.refresh(evidence)
+            logger.info(f"Successfully processed evidence {evidence_id}: {len(evidence.extracted_text or '')} chars extracted")
+            return evidence
+
+        except Exception as e:
+            logger.error(f"Error processing document {evidence_id}: {e}")
+            evidence.status = "failed"
+            evidence.extract_metadata = {"error": str(e)}
+            db.commit()
+            db.refresh(evidence)
+            return evidence
+
+    @staticmethod
+    def update_evidence_status(
+        db: Session,
+        evidence_id: UUID,
+        tenant_id: UUID,
+        status: str
+    ) -> Optional[Evidence]:
+        """Update the status of an evidence record."""
+        evidence = db.query(Evidence).filter(
+            Evidence.id == evidence_id,
+            Evidence.tenant_id == tenant_id
+        ).first()
+        if evidence:
+            evidence.status = status
+            db.commit()
+            db.refresh(evidence)
+        return evidence
+
+    @staticmethod
+    def get_evidence_for_assessment(
+        db: Session,
+        assessment_id: UUID,
+        tenant_id: UUID,
+        status_filter: str = "ready"
+    ) -> List[Evidence]:
+        """Get all ready evidence with extracted text for an assessment (used by AI enrichment)."""
+        query = db.query(Evidence).filter(
+            Evidence.assessment_id == assessment_id,
+            Evidence.tenant_id == tenant_id,
+            Evidence.status == status_filter
+        )
+        return query.order_by(Evidence.created_at.desc()).all()
 
     @staticmethod
     def get_evidence(

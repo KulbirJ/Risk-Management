@@ -126,21 +126,36 @@ class EvidenceInitRequest(BaseModel):
     content_type: str
     size_bytes: int
     threat_id: Optional[UUID] = None
+    document_type: Optional[str] = None  # vulnerability_scan, architecture_doc, policy, other
+
+
+class EvidenceInitResponse(BaseModel):
+    """Response from initiating an upload - contains presigned URL for direct S3 upload."""
+    evidence_id: UUID
+    upload_url: str
+    upload_fields: dict
+    s3_key: str
 
 
 class EvidenceComplete(BaseModel):
-    s3_etag: str
+    """Request to mark upload as complete after S3 upload finishes."""
+    pass
 
 
 class EvidenceRead(BaseModel):
     id: UUID
     assessment_id: UUID
     threat_id: Optional[UUID] = None
+    uploaded_by_id: Optional[UUID] = None
     file_name: str
-    mime_type: str
+    mime_type: Optional[str] = None
     size_bytes: Optional[int] = None
-    status: str
-    quality: str
+    s3_key: Optional[str] = None
+    status: str = "processing"
+    extracted_text: Optional[str] = None
+    extract_metadata: Optional[dict] = None
+    document_type: Optional[str] = None
+    quality: Optional[str] = None
     created_at: datetime
 
     class Config:

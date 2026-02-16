@@ -59,10 +59,26 @@ export interface Threat {
 
 export interface Evidence {
   id: string;
-  description: string;
-  file_url: string;
-  uploaded_at: string;
-  uploaded_by: string;
+  assessment_id: string;
+  threat_id?: string;
+  uploaded_by_id?: string;
+  file_name: string;
+  mime_type?: string;
+  size_bytes?: number;
+  s3_key?: string;
+  status: 'processing' | 'ready' | 'failed';
+  extracted_text?: string;
+  extract_metadata?: Record<string, any>;
+  document_type?: string;
+  quality?: string;
+  created_at: string;
+}
+
+export interface EvidenceInitResponse {
+  evidence_id: string;
+  upload_url: string;
+  upload_fields: Record<string, string>;
+  s3_key: string;
 }
 
 export interface AuditLog {
