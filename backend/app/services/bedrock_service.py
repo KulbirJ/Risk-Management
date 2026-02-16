@@ -64,6 +64,14 @@ class BedrockService:
         max_tokens = max_tokens or self.max_tokens
         temperature = temperature or self.temperature
 
+        # Enforce per-model max token limits
+        if "amazon.nova" in model_id:
+            max_tokens = min(max_tokens, 10000)  # Nova Pro hard limit: 10240
+        elif "anthropic.claude" in model_id and "haiku" in model_id:
+            max_tokens = min(max_tokens, 4096)   # Claude Haiku limit
+        elif "anthropic.claude" in model_id:
+            max_tokens = min(max_tokens, 4096)   # Claude 3 default safe limit
+
         try:
             # Determine model family and format request accordingly
             if "anthropic.claude" in model_id:

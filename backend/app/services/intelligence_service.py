@@ -274,7 +274,7 @@ The following evidence has been uploaded for this assessment. Use this informati
         response = self.bedrock.generate_structured_output(
             prompt=prompt,
             system_prompt=system_prompt,
-            max_tokens=16000  # Large enough for up to 50 findings
+            max_tokens=10000  # Nova Pro max is 10240; stay under limit
         )
 
         if not response:
