@@ -100,7 +100,9 @@ class EvidenceService:
                 mime_type=evidence.mime_type
             )
 
-            evidence.extracted_text = result.get("text", "")
+            # Strip NUL bytes — PostgreSQL TEXT columns reject \x00
+            raw_text = result.get("text", "")
+            evidence.extracted_text = raw_text.replace("\x00", "") if raw_text else ""
             evidence.extract_metadata = result.get("metadata", {})
             evidence.status = "ready"
 
