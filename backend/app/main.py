@@ -179,6 +179,7 @@ def create_app() -> FastAPI:
                 ("evidence", "extract_metadata", "JSONB"),
                 ("evidence", "document_type", "VARCHAR(50)"),
                 ("evidence", "quality", "VARCHAR(20) DEFAULT 'medium'"),
+                ("evidence", "last_enriched_at", "TIMESTAMP WITH TIME ZONE"),
                 ("evidence", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 
                 # ============ RECOMMENDATIONS TABLE ============

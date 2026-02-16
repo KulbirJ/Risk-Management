@@ -156,6 +156,7 @@ class EvidenceRead(BaseModel):
     extract_metadata: Optional[dict] = None
     document_type: Optional[str] = None
     quality: Optional[str] = None
+    last_enriched_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:

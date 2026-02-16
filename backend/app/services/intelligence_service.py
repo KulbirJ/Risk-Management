@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from ..models.models import Assessment, Threat, ActiveRisk, Recommendation, ThreatCatalogue, Evidence
 from ..services.bedrock_service import bedrock_service
 from ..core.config import settings
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -73,11 +74,20 @@ class IntelligenceService:
             Evidence.extracted_text.isnot(None)
         ).order_by(Evidence.created_at.desc()).all()
 
-        evidence_context = self._build_evidence_context(evidence_docs)
+        # Separate new (never-enriched) vs previously-enriched evidence
+        new_evidence = [e for e in evidence_docs if e.last_enriched_at is None]
+        old_evidence = [e for e in evidence_docs if e.last_enriched_at is not None]
+
+        # Build context: prioritize new evidence but include old for full picture
+        evidence_context = self._build_evidence_context(new_evidence, old_evidence)
+
+        # Scale findings cap based on evidence count
+        num_evidence = len(evidence_docs)
+        max_findings = min(max(3, num_evidence * 4), 15)  # 4 findings per file, 3-15 range
 
         try:
             # SINGLE Bedrock call for the entire analysis
-            ai_results = self._run_comprehensive_analysis(assessment, catalogue_summary, evidence_context)
+            ai_results = self._run_comprehensive_analysis(assessment, catalogue_summary, evidence_context, max_findings)
 
             if not ai_results:
                 results["status"] = "completed_no_findings"
@@ -172,6 +182,12 @@ class IntelligenceService:
                     db.rollback()
 
             db.commit()
+
+            # Stamp all evidence as enriched so next run only processes new files
+            for ev in evidence_docs:
+                ev.last_enriched_at = datetime.utcnow()
+            db.commit()
+
             logger.info(f"Assessment enrichment completed: {results}")
 
         except Exception as e:
@@ -186,11 +202,12 @@ class IntelligenceService:
         self,
         assessment: Assessment,
         catalogue_summary: str,
-        evidence_context: str = ""
+        evidence_context: str = "",
+        max_findings: int = 7
     ) -> Optional[Dict[str, Any]]:
         """Run a single comprehensive AI analysis covering vulns, threats, risks, and recommendations."""
 
-        system_prompt = """You are a cybersecurity risk assessment expert. Analyze the assessment and produce a comprehensive security analysis in a SINGLE response.
+        system_prompt = f"""You are a cybersecurity risk assessment expert. Analyze the assessment and produce a comprehensive security analysis in a SINGLE response.
 
 You MUST return valid JSON with this exact structure:
 {
@@ -212,13 +229,17 @@ You MUST return valid JSON with this exact structure:
 }
 
 Rules:
-- Return 3-7 findings maximum
+- Return 3-{max_findings} findings maximum
+- Produce findings for EVERY uploaded evidence document, not just the first one
+- If multiple documents are provided, analyze each one and produce findings from all of them
 - likelihood and impact must be integers 1-10
 - catalogue_key must match one from the provided catalogue, pick the closest match
 - Each finding should have 2-3 specific recommendations
 - severity must be one of: critical, high, medium, low
 - Return ONLY the JSON object, no other text
-- If uploaded evidence (vulnerability scans, architecture docs, etc.) is provided, use that information to identify SPECIFIC, CONCRETE threats rather than generic ones. Reference specific CVEs, misconfigurations, or architectural weaknesses found in the evidence."""
+- If uploaded evidence (vulnerability scans, architecture docs, etc.) is provided, use that information to identify SPECIFIC, CONCRETE threats rather than generic ones. Reference specific CVEs, misconfigurations, or architectural weaknesses found in the evidence.
+- Pay special attention to documents marked as [NEW] — these have not been analyzed before and MUST be covered in your findings.
+- Documents marked as [PREVIOUSLY ANALYZED] are included for context only — do NOT duplicate findings already generated from them."""
 
         prompt = f"""Assessment Title: {assessment.title}
 Overall Impact: {assessment.overall_impact}
@@ -262,37 +283,56 @@ The following evidence has been uploaded for this assessment. Use this informati
         logger.warning(f"Unexpected response format: {type(response)}")
         return None
 
-    def _build_evidence_context(self, evidence_docs: list) -> str:
+    def _build_evidence_context(self, new_evidence: list, old_evidence: Optional[list] = None) -> str:
         """
         Build a text context block from uploaded evidence documents.
-        Truncates to fit within Bedrock token limits.
+        Prioritizes new (un-enriched) evidence, includes old evidence as context.
         """
-        if not evidence_docs:
+        if not new_evidence and not (old_evidence or []):
             return ""
 
-        MAX_EVIDENCE_CHARS = 15000  # Keep evidence context under ~4K tokens
+        MAX_EVIDENCE_CHARS = 30000  # ~8K tokens, enough for multiple files
         sections = []
         total_chars = 0
 
-        for doc in evidence_docs:
-            text = (doc.extracted_text or "").strip()
-            if not text:
-                continue
+        # First: new evidence gets full budget priority
+        if new_evidence:
+            sections.append("=== NEW EVIDENCE (not yet analyzed — MUST be covered in findings) ===")
+            for doc in new_evidence:
+                text = (doc.extracted_text or "").strip()
+                if not text:
+                    continue
+                doc_type = doc.document_type or "other"
+                header = f"[NEW] [{doc_type.upper()}] {doc.file_name}"
+                remaining = MAX_EVIDENCE_CHARS - total_chars
+                if remaining <= 200:
+                    sections.append(f"\n... ({len(new_evidence) - len([s for s in sections if '[NEW]' in s])} more new documents not included due to size limits)")
+                    break
+                if len(text) > remaining:
+                    text = text[:remaining] + f"\n... [truncated, {len(doc.extracted_text)} total chars]"
+                sections.append(f"--- {header} ---\n{text}")
+                total_chars += len(text) + len(header) + 10
 
-            doc_type = doc.document_type or "other"
-            header = f"[{doc_type.upper()}] {doc.file_name}"
-
-            # Budget chars per document
-            remaining = MAX_EVIDENCE_CHARS - total_chars
-            if remaining <= 200:
-                sections.append(f"\n... ({len(evidence_docs) - len(sections)} more documents not included due to size limits)")
-                break
-
-            if len(text) > remaining:
-                text = text[:remaining] + f"\n... [truncated, {len(doc.extracted_text)} total chars]"
-
-            sections.append(f"--- {header} ---\n{text}")
-            total_chars += len(text) + len(header) + 10
+        # Then: old evidence gets remaining budget (for AI context)
+        if old_evidence:
+            remaining_budget = MAX_EVIDENCE_CHARS - total_chars
+            if remaining_budget > 500:
+                sections.append("\n=== PREVIOUSLY ANALYZED EVIDENCE (for context only — do NOT duplicate findings) ===")
+                for doc in old_evidence:
+                    text = (doc.extracted_text or "").strip()
+                    if not text:
+                        continue
+                    doc_type = doc.document_type or "other"
+                    header = f"[PREVIOUSLY ANALYZED] [{doc_type.upper()}] {doc.file_name}"
+                    remaining = MAX_EVIDENCE_CHARS - total_chars
+                    if remaining <= 200:
+                        break
+                    # Summarize old evidence more aggressively
+                    max_old_chars = min(remaining, 3000)
+                    if len(text) > max_old_chars:
+                        text = text[:max_old_chars] + f"\n... [truncated summary]"
+                    sections.append(f"--- {header} ---\n{text}")
+                    total_chars += len(text) + len(header) + 10
 
         return "\n\n".join(sections)
 

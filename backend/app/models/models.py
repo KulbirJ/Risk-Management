@@ -122,6 +122,7 @@ class Evidence(Base):
     extract_metadata = Column(JSONB, nullable=True)  # Parsing metadata (page count, etc.)
     document_type = Column(String(50), nullable=True)  # vulnerability_scan, architecture_doc, policy, other
     quality = Column(String(20), default="medium")  # high, medium, low
+    last_enriched_at = Column(DateTime(timezone=True), nullable=True)  # When this file was last included in AI enrichment
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
     # Relationships
