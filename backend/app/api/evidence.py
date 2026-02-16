@@ -111,8 +111,14 @@ def complete_upload(
         return updated_evidence
     except Exception as e:
         logger.error(f"Error completing upload for {evidence_id}: {e}")
-        # Mark as failed if processing errors
-        EvidenceService.update_evidence_status(db, evidence_id, tenant_id, "failed")
+        # Mark as failed if processing errors, but still return the record (not 500)
+        try:
+            EvidenceService.update_evidence_status(db, evidence_id, tenant_id, "failed")
+            evidence = EvidenceService.get_evidence(db=db, evidence_id=evidence_id, tenant_id=tenant_id)
+            if evidence:
+                return evidence
+        except Exception:
+            pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 

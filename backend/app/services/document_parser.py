@@ -75,20 +75,23 @@ class DocumentParser:
 
     @staticmethod
     def _parse_pdf(file_bytes: bytes, file_name: str) -> dict:
-        """Extract text from PDF files."""
+        """Extract text from PDF files. Tries PyPDF2 first, then pdfplumber."""
+        # Try PyPDF2 first (lightweight, always available in Lambda)
         try:
-            import pdfplumber
-        except ImportError:
-            try:
-                from PyPDF2 import PdfReader
-                reader = PdfReader(io.BytesIO(file_bytes))
-                pages = []
-                for i, page in enumerate(reader.pages):
+            from PyPDF2 import PdfReader
+            reader = PdfReader(io.BytesIO(file_bytes))
+            pages = []
+            for i, page in enumerate(reader.pages):
+                try:
                     text = page.extract_text() or ""
-                    if text.strip():
-                        pages.append(text)
-                
-                full_text = "\n\n--- Page Break ---\n\n".join(pages)
+                except Exception as page_err:
+                    logger.warning(f"PyPDF2 failed on page {i} of {file_name}: {page_err}")
+                    text = ""
+                if text.strip():
+                    pages.append(text)
+
+            full_text = "\n\n--- Page Break ---\n\n".join(pages)
+            if full_text.strip():
                 return {
                     "text": full_text,
                     "metadata": {
@@ -99,39 +102,53 @@ class DocumentParser:
                         "char_count": len(full_text)
                     }
                 }
-            except ImportError:
-                return {
-                    "text": f"[PDF file: {file_name} - PDF parsing libraries not installed. Install pypdf2 or pdfplumber.]",
-                    "metadata": {"parser": "none", "file_name": file_name, "size_bytes": len(file_bytes)}
+            # PyPDF2 extracted no text — try pdfplumber as fallback
+            logger.info(f"PyPDF2 extracted no text from {file_name}, trying pdfplumber")
+        except ImportError:
+            logger.info("PyPDF2 not available, trying pdfplumber")
+        except Exception as e:
+            logger.warning(f"PyPDF2 failed for {file_name}: {e}, trying pdfplumber")
+
+        # Fallback: try pdfplumber (better for scanned/complex PDFs)
+        try:
+            import pdfplumber
+            pages = []
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                for i, page in enumerate(pdf.pages):
+                    try:
+                        text = page.extract_text() or ""
+                        tables = page.extract_tables()
+                        table_text = ""
+                        for table in tables:
+                            for row in table:
+                                table_text += " | ".join(str(cell or "") for cell in row) + "\n"
+                        combined = text
+                        if table_text:
+                            combined += f"\n[Table Data]\n{table_text}"
+                        if combined.strip():
+                            pages.append(combined)
+                    except Exception as page_err:
+                        logger.warning(f"pdfplumber failed on page {i} of {file_name}: {page_err}")
+
+            full_text = "\n\n--- Page Break ---\n\n".join(pages)
+            return {
+                "text": full_text or f"[PDF file: {file_name} - no extractable text found]",
+                "metadata": {
+                    "parser": "pdfplumber",
+                    "page_count": len(pages),
+                    "file_name": file_name,
+                    "char_count": len(full_text)
                 }
-
-        # Use pdfplumber (better table/text extraction)
-        pages = []
-        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-            for i, page in enumerate(pdf.pages):
-                text = page.extract_text() or ""
-                # Also try to extract tables
-                tables = page.extract_tables()
-                table_text = ""
-                for table in tables:
-                    for row in table:
-                        table_text += " | ".join(str(cell or "") for cell in row) + "\n"
-                
-                combined = text
-                if table_text:
-                    combined += f"\n[Table Data]\n{table_text}"
-                if combined.strip():
-                    pages.append(combined)
-
-        full_text = "\n\n--- Page Break ---\n\n".join(pages)
-        return {
-            "text": full_text,
-            "metadata": {
-                "parser": "pdfplumber",
-                "page_count": len(pages),
-                "file_name": file_name,
-                "char_count": len(full_text)
             }
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning(f"pdfplumber also failed for {file_name}: {e}")
+
+        # Both parsers unavailable or failed
+        return {
+            "text": f"[PDF file: {file_name} - could not extract text. Size: {len(file_bytes)} bytes]",
+            "metadata": {"parser": "none", "file_name": file_name, "size_bytes": len(file_bytes)}
         }
 
     @staticmethod

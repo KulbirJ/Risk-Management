@@ -10,26 +10,14 @@ from ..core.config import settings
 logger = logging.getLogger(__name__)
 
 
-def _get_s3_client():
-    """Get S3 client using boto3 default credential chain.
+def get_s3_client():
+    """Get a fresh S3 client using boto3 default credential chain.
     
+    Creates a new client each time to avoid stale credential issues.
     In Lambda, boto3 automatically uses the execution role's temporary
     credentials (access key + secret + session token) from the environment.
-    Do NOT pass explicit credentials — that omits the session token and
-    causes InvalidAccessKeyId errors.
     """
     return boto3.client('s3', region_name=settings.s3_bucket_region)
-
-
-# Lazy-init S3 client
-_s3_client: Optional[object] = None
-
-
-def get_s3_client():
-    global _s3_client
-    if _s3_client is None:
-        _s3_client = _get_s3_client()
-    return _s3_client
 
 
 def generate_evidence_s3_key(
