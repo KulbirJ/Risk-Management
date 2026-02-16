@@ -52,13 +52,11 @@ jobs:
           find . -type f -name '*.pyo' -delete 2>/dev/null || true
           find . -type d -name '*.dist-info' -exec rm -rf {} + 2>/dev/null || true
           find . -type d -name '*.egg-info' -exec rm -rf {} + 2>/dev/null || true
-          # Lambda runtime already includes boto3/botocore - remove to save ~60MB
-          rm -rf boto3 botocore s3transfer 2>/dev/null || true
-          # Remove other packages not needed in Lambda
+          # Remove packages not needed in Lambda runtime
           rm -rf uvicorn 2>/dev/null || true
-          rm -rf docutils 2>/dev/null || true
-          rm -rf setuptools pip _distutils_hack pkg_resources 2>/dev/null || true
-          rm -rf jmespath/compat.py 2>/dev/null || true
+          rm -rf setuptools pip _distutils_hack pkg_resources docutils 2>/dev/null || true
+          # Strip debug symbols from .so files to reduce size
+          find . -name '*.so' -exec strip --strip-unneeded {} + 2>/dev/null || true
           zip -r ../lambda-deployment.zip . -x '*.pyc' -x '__pycache__/*'
           echo "Package size: $(du -sh ../lambda-deployment.zip | cut -f1)"
       
