@@ -81,13 +81,15 @@ class IntelligenceService:
         # Build context: prioritize new evidence but include old for full picture
         evidence_context = self._build_evidence_context(new_evidence, old_evidence)
 
-        # Scale findings cap based on evidence count
-        num_evidence = len(evidence_docs)
-        max_findings = min(max(3, num_evidence * 4), 15)  # 4 findings per file, 3-15 range
+        # Build explicit file manifest so AI knows exactly which files to analyze
+        file_manifest = self._build_file_manifest(new_evidence, old_evidence)
+
+        # Max 50 findings
+        max_findings = 50
 
         try:
             # SINGLE Bedrock call for the entire analysis
-            ai_results = self._run_comprehensive_analysis(assessment, catalogue_summary, evidence_context, max_findings)
+            ai_results = self._run_comprehensive_analysis(assessment, catalogue_summary, evidence_context, max_findings, file_manifest)
 
             if not ai_results:
                 results["status"] = "completed_no_findings"
@@ -203,11 +205,12 @@ class IntelligenceService:
         assessment: Assessment,
         catalogue_summary: str,
         evidence_context: str = "",
-        max_findings: int = 7
+        max_findings: int = 50,
+        file_manifest: str = ""
     ) -> Optional[Dict[str, Any]]:
         """Run a single comprehensive AI analysis covering vulns, threats, risks, and recommendations."""
 
-        system_prompt = f"""You are a cybersecurity risk assessment expert. Analyze the assessment and produce a comprehensive security analysis in a SINGLE response.
+        system_prompt = f"""You are a cybersecurity risk assessment expert. Analyze the assessment and ALL uploaded evidence documents to produce a comprehensive security analysis.
 
 You MUST return valid JSON with this exact structure:
 {{
@@ -220,6 +223,7 @@ You MUST return valid JSON with this exact structure:
       "likelihood": 7,
       "impact": 8,
       "justification": "Why these scores were assigned",
+      "source_file": "name of the evidence file this finding came from",
       "recommendations": [
         "Specific actionable mitigation step 1",
         "Specific actionable mitigation step 2"
@@ -228,18 +232,19 @@ You MUST return valid JSON with this exact structure:
   ]
 }}
 
-Rules:
-- Return 3-{max_findings} findings maximum
-- Produce findings for EVERY uploaded evidence document, not just the first one
-- If multiple documents are provided, analyze each one and produce findings from all of them
+CRITICAL RULES:
+- You MUST produce findings from EVERY evidence file listed below. Do NOT skip any file.
+- Return up to {max_findings} findings total.
+- Produce AT LEAST 2 findings per evidence file.
 - likelihood and impact must be integers 1-10
 - catalogue_key must match one from the provided catalogue, pick the closest match
 - Each finding should have 2-3 specific recommendations
 - severity must be one of: critical, high, medium, low
+- source_file must be the exact file name the finding came from
 - Return ONLY the JSON object, no other text
-- If uploaded evidence (vulnerability scans, architecture docs, etc.) is provided, use that information to identify SPECIFIC, CONCRETE threats rather than generic ones. Reference specific CVEs, misconfigurations, or architectural weaknesses found in the evidence.
-- Pay special attention to documents marked as [NEW] — these have not been analyzed before and MUST be covered in your findings.
-- Documents marked as [PREVIOUSLY ANALYZED] are included for context only — do NOT duplicate findings already generated from them."""
+- Use evidence content to identify SPECIFIC, CONCRETE threats. Reference specific CVEs, misconfigurations, or architectural weaknesses.
+- For documents marked [NEW]: these MUST be analyzed. Generate findings from them.
+- For documents marked [PREVIOUSLY ANALYZED]: included for context only. Do NOT duplicate findings from them."""
 
         prompt = f"""Assessment Title: {assessment.title}
 Overall Impact: {assessment.overall_impact}
@@ -253,6 +258,13 @@ Description:
 Available Threat Catalogue Keys:
 {catalogue_summary}"""
 
+        # Add explicit file manifest
+        if file_manifest:
+            prompt += f"""\n\n=== FILES TO ANALYZE ===
+{file_manifest}
+You MUST produce findings from EACH file listed above.
+=== END FILE LIST ==="""
+
         # Append evidence context if available
         if evidence_context:
             prompt += f"""
@@ -263,7 +275,7 @@ The following evidence has been uploaded for this assessment. Use this informati
 {evidence_context}
 === END EVIDENCE ==="""
 
-        prompt += "\n\nAnalyze this assessment and return the comprehensive JSON analysis."
+        prompt += "\n\nAnalyze this assessment and ALL evidence files. Return the comprehensive JSON analysis with findings from EVERY file."
 
         response = self.bedrock.generate_structured_output(
             prompt=prompt,
@@ -283,6 +295,19 @@ The following evidence has been uploaded for this assessment. Use this informati
         logger.warning(f"Unexpected response format: {type(response)}")
         return None
 
+    def _build_file_manifest(self, new_evidence: list, old_evidence: Optional[list] = None) -> str:
+        """Build an explicit list of files the AI must analyze."""
+        lines = []
+        for i, doc in enumerate(new_evidence, 1):
+            doc_type = doc.document_type or "other"
+            chars = len(doc.extracted_text or "")
+            lines.append(f"{i}. [NEW - MUST ANALYZE] {doc.file_name} ({doc_type}, {chars} chars)")
+        if old_evidence:
+            for doc in old_evidence:
+                doc_type = doc.document_type or "other"
+                lines.append(f"   [PREVIOUSLY ANALYZED - context only] {doc.file_name} ({doc_type})")
+        return "\n".join(lines)
+
     def _build_evidence_context(self, new_evidence: list, old_evidence: Optional[list] = None) -> str:
         """
         Build a text context block from uploaded evidence documents.
@@ -291,7 +316,7 @@ The following evidence has been uploaded for this assessment. Use this informati
         if not new_evidence and not (old_evidence or []):
             return ""
 
-        MAX_EVIDENCE_CHARS = 30000  # ~8K tokens, enough for multiple files
+        MAX_EVIDENCE_CHARS = 50000  # ~12K tokens, enough for multiple large files
         sections = []
         total_chars = 0
 
