@@ -344,6 +344,16 @@ Reference specific CVEs, misconfigurations, or security weaknesses. Every findin
         results: Dict[str, Any],
     ) -> None:
         """Process a list of findings: create Threat + Recommendation records in DB."""
+        # Build a set of analyst-assessed threat titles to avoid duplicating them
+        analyst_titles = {
+            t.title.strip().lower()
+            for t in db.query(Threat.title).filter(
+                Threat.assessment_id == assessment.id,
+                Threat.tenant_id == assessment.tenant_id,
+                Threat.detected_by == "analyst_assessed",
+            ).all()
+        }
+
         for finding in findings:
             try:
                 matched_key = finding.get("catalogue_key", "")
@@ -351,6 +361,11 @@ Reference specific CVEs, misconfigurations, or security weaknesses. Every findin
 
                 severity = finding.get("severity", "medium")
                 vuln_title = finding.get("vulnerability", "Unknown Vulnerability")[:200]
+
+                # Skip if an analyst-assessed threat with a similar title already exists
+                if vuln_title.strip().lower() in analyst_titles:
+                    logger.info(f"Skipping AI finding '{vuln_title}' — already analyst-assessed")
+                    continue
 
                 threat = Threat(
                     tenant_id=assessment.tenant_id,
