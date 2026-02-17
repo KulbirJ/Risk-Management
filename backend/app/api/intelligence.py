@@ -145,7 +145,8 @@ def enrich_assessment(
             results = intelligence_service.enrich_assessment(
                 db=db,
                 assessment_id=str(request.assessment_id),
-                tenant_id=str(tenant_id)
+                tenant_id=str(tenant_id),
+                job_id=str(job.id),
             )
             job.status = results.get("status", "completed")
             job.completed_at = datetime.utcnow()

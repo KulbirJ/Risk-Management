@@ -1,211 +1,33 @@
 """Intelligence service for AI-powered assessment enrichment.
 
-Uses async Lambda self-invocation with a SINGLE Bedrock call.
+Uses async Lambda self-invocation with per-item Bedrock calls.
+Each input (assessment metadata, individual evidence files) gets its own
+focused Bedrock call, keeping prompts small and responses fast.
 """
 import json
 import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from sqlalchemy.orm import Session
-from ..models.models import Assessment, Threat, Recommendation, ThreatCatalogue, Evidence
+from ..models.models import Assessment, Threat, Recommendation, ThreatCatalogue, Evidence, IntelligenceJob
 from ..services.bedrock_service import bedrock_service
 from ..core.config import settings
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+# Max chars of evidence text per Bedrock call
+MAX_CHARS_PER_FILE = 15000
+# Max findings from assessment metadata analysis
+MAX_FINDINGS_METADATA = 5
+# Max findings from a single evidence file analysis
+MAX_FINDINGS_PER_FILE = 8
 
-class IntelligenceService:
-    """Service for AI-powered assessment enrichment and analysis."""
 
-    def __init__(self):
-        """Initialize intelligence service."""
-        self.bedrock = bedrock_service
-        self.confidence_threshold = settings.intelligence_confidence_threshold
+def _system_prompt(max_findings: int) -> str:
+    """Shared system prompt for all Bedrock calls."""
+    return f"""You are a cybersecurity risk assessment expert. Analyze the provided information and produce a focused security analysis.
 
-    def enrich_assessment(
-        self,
-        db: Session,
-        assessment_id: str,
-        tenant_id: str
-    ) -> Dict[str, Any]:
-        """
-        Enrich an assessment with AI-generated insights using a single Bedrock call.
-        """
-        logger.info(f"Enriching assessment {assessment_id}")
-        assessment = db.query(Assessment).filter(
-            Assessment.id == assessment_id,
-            Assessment.tenant_id == tenant_id
-        ).first()
-
-        if not assessment:
-            raise ValueError(f"Assessment {assessment_id} not found")
-
-        logger.info(f"Assessment found: {assessment.title}")
-
-        results = {
-            "assessment_id": assessment_id,
-            "status": "completed",
-            "vulnerabilities_identified": 0,
-            "threats_mapped": 0,
-            "risks_created": 0,
-            "recommendations_generated": 0,
-            "errors": []
-        }
-
-        # Get threat catalogue for context
-        catalogue_threats = db.query(ThreatCatalogue).filter(
-            ThreatCatalogue.tenant_id == tenant_id,
-            ThreatCatalogue.is_active == True
-        ).all()
-
-        catalogue_summary = "\n".join([
-            f"- catalogue_key: {t.catalogue_key}, name: {t.name}, category: {t.category or 'General'}"
-            for t in catalogue_threats[:20]
-        ]) if catalogue_threats else "No threat catalogue available"
-
-        # Build catalogue lookup
-        catalogue_map = {t.catalogue_key: t for t in catalogue_threats}
-
-        # Fetch uploaded evidence with extracted text for this assessment
-        evidence_docs = db.query(Evidence).filter(
-            Evidence.assessment_id == assessment_id,
-            Evidence.tenant_id == tenant_id,
-            Evidence.status == "ready",
-            Evidence.extracted_text.isnot(None)
-        ).order_by(Evidence.created_at.desc()).all()
-
-        # Separate new (never-enriched) vs previously-enriched evidence
-        new_evidence = [e for e in evidence_docs if e.last_enriched_at is None]
-        old_evidence = [e for e in evidence_docs if e.last_enriched_at is not None]
-
-        # If ALL files have been previously enriched (no new files), treat them
-        # all as new so the AI does a full re-analysis when user clicks enrich
-        if not new_evidence and old_evidence:
-            new_evidence = old_evidence
-            old_evidence = []
-
-        # Build context: prioritize new evidence but include old for full picture
-        evidence_context = self._build_evidence_context(new_evidence, old_evidence)
-
-        # Build explicit file manifest so AI knows exactly which files to analyze
-        file_manifest = self._build_file_manifest(new_evidence, old_evidence)
-
-        # Max 50 findings
-        max_findings = 50
-
-        # Guard: if no evidence with extracted text exists, report it
-        if not evidence_docs:
-            logger.warning(f"No ready evidence with extracted text for assessment {assessment_id}")
-            results["status"] = "completed_no_findings"
-            results["errors"].append("No evidence documents with extracted text found. Upload and process evidence files first.")
-            return results
-
-        try:
-            # SINGLE Bedrock call for the entire analysis
-            ai_results = self._run_comprehensive_analysis(assessment, catalogue_summary, evidence_context, max_findings, file_manifest)
-
-            if ai_results is None:
-                logger.warning(f"Bedrock returned no results for assessment {assessment_id}")
-                results["status"] = "completed_no_findings"
-                results["errors"].append("AI model returned no response. This may be a temporary issue — try again.")
-                return results
-
-            findings = ai_results.get("findings", [])
-            results["vulnerabilities_identified"] = len(findings)
-
-            if not findings:
-                logger.warning(f"AI returned response but with empty findings array for assessment {assessment_id}")
-                results["status"] = "completed_no_findings"
-                results["errors"].append("AI analysis completed but produced no findings. Try re-running enrichment.")
-                return results
-
-            # Process each finding and create DB records
-            # NOTE: We only create Threat + Recommendation records here.
-            # ActiveRisk entries are created by the user when they change
-            # a threat's status to "at_risk" in the frontend.
-            for finding in findings:
-                try:
-                    # Match to catalogue threat
-                    matched_key = finding.get("catalogue_key", "")
-                    cat_threat = catalogue_map.get(matched_key)
-
-                    # Create Threat record
-                    severity = finding.get("severity", "medium")
-                    vuln_title = finding.get("vulnerability", "Unknown Vulnerability")[:200]
-
-                    threat = Threat(
-                        tenant_id=assessment.tenant_id,
-                        assessment_id=assessment.id,
-                        catalogue_key=matched_key or "unmapped",
-                        title=vuln_title,
-                        description=finding.get("description", ""),
-                        detected_by="ai_intelligence",
-                        likelihood=cat_threat.default_likelihood if cat_threat else "Medium",
-                        impact=cat_threat.default_impact if cat_threat else "Medium",
-                        severity=severity,
-                        status="identified",
-                        ai_rationale=finding.get("justification", "AI-identified threat")
-                    )
-                    db.add(threat)
-                    db.flush()
-                    results["threats_mapped"] += 1
-
-                    # Create Recommendations linked to the threat (not to an ActiveRisk)
-                    for rec in finding.get("recommendations", [])[:3]:
-                        rec_title = rec if isinstance(rec, str) else rec.get("title", "Mitigation")
-                        rec_desc = rec if isinstance(rec, str) else rec.get("description", rec.get("title", ""))
-                        recommendation = Recommendation(
-                            tenant_id=assessment.tenant_id,
-                            assessment_id=assessment.id,
-                            threat_id=threat.id,
-                            title=str(rec_title)[:255],
-                            description=str(rec_desc),
-                            text=str(rec_desc),
-                            priority=finding.get("severity", "medium").capitalize(),
-                            status="open",
-                            ai_generated=True,
-                            estimated_effort="medium",
-                            cost_estimate="medium"
-                        )
-                        db.add(recommendation)
-                        results["recommendations_generated"] += 1
-
-                except Exception as e:
-                    logger.error(f"Error processing finding: {e}")
-                    results["errors"].append(str(e))
-                    db.rollback()
-
-            db.commit()
-
-            # Stamp all evidence as enriched so next run only processes new files
-            for ev in evidence_docs:
-                ev.last_enriched_at = datetime.utcnow()
-            db.commit()
-
-            logger.info(f"Assessment enrichment completed: {results}")
-
-        except Exception as e:
-            logger.error(f"Assessment enrichment failed: {e}")
-            results["status"] = "failed"
-            results["errors"].append(str(e))
-            db.rollback()
-
-        return results
-
-    def _run_comprehensive_analysis(
-        self,
-        assessment: Assessment,
-        catalogue_summary: str,
-        evidence_context: str = "",
-        max_findings: int = 50,
-        file_manifest: str = ""
-    ) -> Optional[Dict[str, Any]]:
-        """Run a single comprehensive AI analysis covering vulns, threats, risks, and recommendations."""
-
-        system_prompt = f"""You are a cybersecurity risk assessment expert. Analyze the assessment and ALL uploaded evidence documents to produce a comprehensive security analysis.
-
-You MUST return valid JSON with this exact structure:
+Return valid JSON with this exact structure:
 {{
   "findings": [
     {{
@@ -216,7 +38,7 @@ You MUST return valid JSON with this exact structure:
       "likelihood": 7,
       "impact": 8,
       "justification": "Why these scores were assigned",
-      "source_file": "name of the evidence file this finding came from",
+      "source": "what input this finding came from",
       "recommendations": [
         "Specific actionable mitigation step 1",
         "Specific actionable mitigation step 2"
@@ -225,143 +47,364 @@ You MUST return valid JSON with this exact structure:
   ]
 }}
 
-CRITICAL RULES:
-- You MUST produce findings from EVERY evidence file listed below. Do NOT skip any file.
-- Return up to {max_findings} findings total.
-- Produce AT LEAST 2 findings per evidence file.
+Rules:
+- Return up to {max_findings} findings
 - likelihood and impact must be integers 1-10
-- catalogue_key must match one from the provided catalogue, pick the closest match
-- Each finding should have 2-3 specific recommendations
+- catalogue_key MUST match one from the provided catalogue — pick closest match
+- Each finding must have 2-3 specific, actionable recommendations
 - severity must be one of: critical, high, medium, low
-- source_file must be the exact file name the finding came from
-- Return ONLY the JSON object, no other text
-- Use evidence content to identify SPECIFIC, CONCRETE threats. Reference specific CVEs, misconfigurations, or architectural weaknesses.
-- For documents marked [NEW]: these MUST be analyzed. Generate findings from them.
-- For documents marked [PREVIOUSLY ANALYZED]: included for context only. Do NOT duplicate findings from them."""
+- Return ONLY the JSON object, no markdown, no explanation
+- Identify SPECIFIC, CONCRETE threats — reference CVEs, misconfigurations, or architectural weaknesses where applicable
+- Do NOT produce generic or vague findings"""
 
-        prompt = f"""Assessment Title: {assessment.title}
-Overall Impact: {assessment.overall_impact}
+
+class IntelligenceService:
+    """Service for AI-powered assessment enrichment and analysis."""
+
+    def __init__(self):
+        """Initialize intelligence service."""
+        self.bedrock = bedrock_service
+        self.confidence_threshold = settings.intelligence_confidence_threshold
+
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
+
+    def enrich_assessment(
+        self,
+        db: Session,
+        assessment_id: str,
+        tenant_id: str,
+        job_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Enrich an assessment with AI-generated insights.
+
+        1. Clears previous AI-generated threats & recommendations.
+        2. Builds a list of analysis items (assessment metadata + evidence files).
+        3. Calls Bedrock once per item with a focused prompt.
+        4. Saves findings to DB and returns aggregated results.
+        """
+        logger.info(f"Enriching assessment {assessment_id}")
+
+        assessment = db.query(Assessment).filter(
+            Assessment.id == assessment_id,
+            Assessment.tenant_id == tenant_id,
+        ).first()
+        if not assessment:
+            raise ValueError(f"Assessment {assessment_id} not found")
+
+        logger.info(f"Assessment found: {assessment.title}")
+
+        # ── Step 1: Clear old AI-generated data ─────────────────────
+        cleared = self._clear_ai_generated_data(db, assessment_id, tenant_id)
+        logger.info(f"Cleared {cleared['threats']} old AI threats, {cleared['recommendations']} old AI recommendations")
+
+        results: Dict[str, Any] = {
+            "assessment_id": assessment_id,
+            "status": "completed",
+            "vulnerabilities_identified": 0,
+            "threats_mapped": 0,
+            "risks_created": 0,
+            "recommendations_generated": 0,
+            "errors": [],
+            "items_total": 0,
+            "items_processed": 0,
+        }
+
+        # Get threat catalogue for context
+        catalogue_threats = db.query(ThreatCatalogue).filter(
+            ThreatCatalogue.tenant_id == tenant_id,
+            ThreatCatalogue.is_active == True,
+        ).all()
+
+        catalogue_summary = "\n".join([
+            f"- catalogue_key: {t.catalogue_key}, name: {t.name}, category: {t.category or 'General'}"
+            for t in catalogue_threats[:20]
+        ]) if catalogue_threats else "No threat catalogue available"
+
+        catalogue_map = {t.catalogue_key: t for t in catalogue_threats}
+
+        # Fetch evidence files with extracted text
+        evidence_docs = db.query(Evidence).filter(
+            Evidence.assessment_id == assessment_id,
+            Evidence.tenant_id == tenant_id,
+            Evidence.status == "ready",
+            Evidence.extracted_text.isnot(None),
+        ).order_by(Evidence.created_at.desc()).all()
+
+        # ── Step 2: Build analysis items ────────────────────────────
+        items: List[Dict[str, Any]] = []
+
+        has_metadata = any([
+            assessment.description,
+            assessment.scope,
+            assessment.system_background,
+            assessment.tech_stack,
+        ])
+        if has_metadata:
+            items.append({"type": "metadata", "label": "Assessment context"})
+
+        for doc in evidence_docs:
+            items.append({"type": "evidence", "label": doc.file_name, "evidence": doc})
+
+        results["items_total"] = len(items)
+
+        if not items:
+            results["status"] = "completed_no_findings"
+            results["errors"].append(
+                "No assessment details or evidence files to analyze. "
+                "Add a description/scope/tech stack or upload evidence files first."
+            )
+            return results
+
+        # ── Step 3: Analyze each item ───────────────────────────────
+        for i, item in enumerate(items):
+            item_label = item["label"]
+            try:
+                logger.info(f"Analyzing item {i+1}/{len(items)}: {item_label}")
+
+                if item["type"] == "metadata":
+                    findings = self._analyze_assessment_metadata(
+                        assessment, catalogue_summary
+                    )
+                else:
+                    findings = self._analyze_evidence_file(
+                        item["evidence"], assessment, catalogue_summary
+                    )
+
+                if findings:
+                    self._process_findings(db, findings, assessment, catalogue_map, results)
+
+                results["items_processed"] = i + 1
+
+                # Push incremental progress to the job row
+                if job_id:
+                    self._update_job_progress(db, job_id, results)
+
+            except Exception as e:
+                logger.error(f"Error analyzing {item_label}: {e}")
+                results["errors"].append(f"Error analyzing {item_label}: {str(e)}")
+                results["items_processed"] = i + 1
+
+        # Stamp evidence as enriched
+        for doc in evidence_docs:
+            doc.last_enriched_at = datetime.utcnow()
+        db.commit()
+
+        results["vulnerabilities_identified"] = results["threats_mapped"]
+
+        if results["threats_mapped"] == 0:
+            results["status"] = "completed_no_findings"
+
+        logger.info(
+            f"Enrichment complete: {results['threats_mapped']} threats, "
+            f"{results['recommendations_generated']} recommendations"
+        )
+        return results
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _clear_ai_generated_data(
+        self, db: Session, assessment_id: str, tenant_id: str
+    ) -> Dict[str, int]:
+        """Delete all AI-generated threats and recommendations for the assessment."""
+        # Find AI-generated threat IDs so we can clean up linked recommendations
+        ai_threat_ids = [
+            t.id for t in db.query(Threat.id).filter(
+                Threat.assessment_id == assessment_id,
+                Threat.tenant_id == tenant_id,
+                Threat.detected_by == "ai_intelligence",
+            ).all()
+        ]
+
+        rec_count = 0
+        if ai_threat_ids:
+            # Delete recommendations linked to AI threats
+            rec_count = db.query(Recommendation).filter(
+                Recommendation.threat_id.in_(ai_threat_ids),
+            ).delete(synchronize_session="fetch")
+
+        # Also delete any other AI-generated recommendations for this assessment
+        rec_count += db.query(Recommendation).filter(
+            Recommendation.assessment_id == assessment_id,
+            Recommendation.tenant_id == tenant_id,
+            Recommendation.ai_generated == True,
+        ).delete(synchronize_session="fetch")
+
+        # Delete the AI threats themselves
+        threat_count = db.query(Threat).filter(
+            Threat.assessment_id == assessment_id,
+            Threat.tenant_id == tenant_id,
+            Threat.detected_by == "ai_intelligence",
+        ).delete(synchronize_session="fetch")
+
+        db.commit()
+        return {"threats": threat_count, "recommendations": rec_count}
+
+    def _analyze_assessment_metadata(
+        self, assessment: Assessment, catalogue_summary: str
+    ) -> List[Dict[str, Any]]:
+        """Run Bedrock analysis on assessment metadata (description, scope, tech stack)."""
+        tech = ", ".join(assessment.tech_stack) if assessment.tech_stack else "Not specified"
+
+        prompt = f"""Analyze this security assessment for potential threats and vulnerabilities based on the described system, scope, and technology stack.
+
+Assessment: {assessment.title}
+Impact Level: {assessment.overall_impact}
 System Background: {assessment.system_background or 'Not specified'}
 Scope: {assessment.scope or 'Not specified'}
-Tech Stack: {', '.join(assessment.tech_stack) if assessment.tech_stack else 'Not specified'}
+Tech Stack: {tech}
 
 Description:
-{assessment.description or 'No description provided'}
+{assessment.description or 'Not provided'}
 
-Available Threat Catalogue Keys:
-{catalogue_summary}"""
+Available Threat Catalogue:
+{catalogue_summary}
 
-        # Add explicit file manifest
-        if file_manifest:
-            prompt += f"""\n\n=== FILES TO ANALYZE ===
-{file_manifest}
-You MUST produce findings from EACH file listed above.
-=== END FILE LIST ==="""
+Identify threats and vulnerabilities specific to the described system, scope, and technologies.
+Focus on architectural risks, known CVEs for the tech stack, and scope-related security gaps."""
 
-        # Append evidence context if available
-        if evidence_context:
-            prompt += f"""
-
-=== UPLOADED EVIDENCE & DOCUMENTS ===
-The following evidence has been uploaded for this assessment. Use this information to produce more specific and accurate findings:
-
-{evidence_context}
-=== END EVIDENCE ==="""
-
-        prompt += "\n\nAnalyze this assessment and ALL evidence files. Return the comprehensive JSON analysis with findings from EVERY file."
-
-        logger.info(f"Calling Bedrock (prompt: {len(prompt)} chars, system: {len(system_prompt)} chars)")
+        logger.info(f"Metadata prompt: {len(prompt)} chars")
 
         response = self.bedrock.generate_structured_output(
             prompt=prompt,
-            system_prompt=system_prompt,
-            max_tokens=10000  # Nova Pro max is 10240; stay under limit
+            system_prompt=_system_prompt(MAX_FINDINGS_METADATA),
+            max_tokens=4000,
         )
 
-        logger.info(f"Bedrock returned response (type={type(response).__name__})")
+        if not response:
+            logger.warning("Bedrock returned no response for metadata analysis")
+            return []
+
+        findings = response.get("findings", [])
+        # Tag each finding with its source
+        for f in findings:
+            f.setdefault("source", "Assessment metadata")
+        return findings
+
+    def _analyze_evidence_file(
+        self,
+        evidence: Evidence,
+        assessment: Assessment,
+        catalogue_summary: str,
+    ) -> List[Dict[str, Any]]:
+        """Run Bedrock analysis on a single evidence file."""
+        text = (evidence.extracted_text or "").strip()
+        if not text:
+            return []
+
+        # Truncate to per-file limit
+        if len(text) > MAX_CHARS_PER_FILE:
+            text = text[:MAX_CHARS_PER_FILE] + f"\n... [truncated, {len(evidence.extracted_text)} total chars]"
+
+        tech = ", ".join(assessment.tech_stack) if assessment.tech_stack else "Not specified"
+
+        prompt = f"""Analyze this security-related document for threats and vulnerabilities.
+
+Assessment Context: {assessment.title} ({assessment.overall_impact} impact)
+Tech Stack: {tech}
+
+Document: {evidence.file_name} (type: {evidence.document_type or 'other'})
+
+Content:
+{text}
+
+Available Threat Catalogue:
+{catalogue_summary}
+
+Identify specific threats and vulnerabilities found in this document.
+Reference specific CVEs, misconfigurations, or security weaknesses. Every finding must cite content from the document."""
+
+        logger.info(f"Evidence file prompt ({evidence.file_name}): {len(prompt)} chars")
+
+        response = self.bedrock.generate_structured_output(
+            prompt=prompt,
+            system_prompt=_system_prompt(MAX_FINDINGS_PER_FILE),
+            max_tokens=5000,
+        )
 
         if not response:
-            logger.warning(f"No response from Bedrock for assessment {assessment.id}. "
-                          f"Bedrock enabled: {self.bedrock.enabled}, client initialized: {self.bedrock.client is not None}")
-            return None
+            logger.warning(f"Bedrock returned no response for {evidence.file_name}")
+            return []
 
-        # Handle various response formats
-        if isinstance(response, dict):
-            findings_count = len(response.get("findings", []))
-            logger.info(f"Bedrock returned dict with {findings_count} findings for assessment {assessment.id}")
-            return response
-        elif isinstance(response, list):
-            logger.info(f"Bedrock returned list with {len(response)} items for assessment {assessment.id}")
-            return {"findings": response}
+        findings = response.get("findings", [])
+        for f in findings:
+            f.setdefault("source", evidence.file_name)
+        return findings
 
-        logger.warning(f"Unexpected response format from Bedrock: {type(response)}")
-        return None
+    def _process_findings(
+        self,
+        db: Session,
+        findings: List[Dict[str, Any]],
+        assessment: Assessment,
+        catalogue_map: Dict[str, ThreatCatalogue],
+        results: Dict[str, Any],
+    ) -> None:
+        """Process a list of findings: create Threat + Recommendation records in DB."""
+        for finding in findings:
+            try:
+                matched_key = finding.get("catalogue_key", "")
+                cat_threat = catalogue_map.get(matched_key)
 
-    def _build_file_manifest(self, new_evidence: list, old_evidence: Optional[list] = None) -> str:
-        """Build an explicit list of files the AI must analyze."""
-        lines = []
-        for i, doc in enumerate(new_evidence, 1):
-            doc_type = doc.document_type or "other"
-            chars = len(doc.extracted_text or "")
-            lines.append(f"{i}. [NEW - MUST ANALYZE] {doc.file_name} ({doc_type}, {chars} chars)")
-        if old_evidence:
-            for doc in old_evidence:
-                doc_type = doc.document_type or "other"
-                lines.append(f"   [PREVIOUSLY ANALYZED - context only] {doc.file_name} ({doc_type})")
-        return "\n".join(lines)
+                severity = finding.get("severity", "medium")
+                vuln_title = finding.get("vulnerability", "Unknown Vulnerability")[:200]
 
-    def _build_evidence_context(self, new_evidence: list, old_evidence: Optional[list] = None) -> str:
-        """
-        Build a text context block from uploaded evidence documents.
-        Prioritizes new (un-enriched) evidence, includes old evidence as context.
-        """
-        if not new_evidence and not (old_evidence or []):
-            return ""
+                threat = Threat(
+                    tenant_id=assessment.tenant_id,
+                    assessment_id=assessment.id,
+                    catalogue_key=matched_key or "unmapped",
+                    title=vuln_title,
+                    description=finding.get("description", ""),
+                    detected_by="ai_intelligence",
+                    likelihood=cat_threat.default_likelihood if cat_threat else "Medium",
+                    impact=cat_threat.default_impact if cat_threat else "Medium",
+                    severity=severity,
+                    status="identified",
+                    ai_rationale=finding.get("justification", "AI-identified threat"),
+                )
+                db.add(threat)
+                db.flush()
+                results["threats_mapped"] += 1
 
-        MAX_EVIDENCE_CHARS = 20000  # ~5K tokens; keeps Bedrock processing under 60s
-        sections = []
-        total_chars = 0
+                for rec in finding.get("recommendations", [])[:3]:
+                    rec_title = rec if isinstance(rec, str) else rec.get("title", "Mitigation")
+                    rec_desc = rec if isinstance(rec, str) else rec.get("description", rec.get("title", ""))
+                    recommendation = Recommendation(
+                        tenant_id=assessment.tenant_id,
+                        assessment_id=assessment.id,
+                        threat_id=threat.id,
+                        title=str(rec_title)[:255],
+                        description=str(rec_desc),
+                        text=str(rec_desc),
+                        priority=finding.get("severity", "medium").capitalize(),
+                        status="open",
+                        ai_generated=True,
+                        estimated_effort="medium",
+                        cost_estimate="medium",
+                    )
+                    db.add(recommendation)
+                    results["recommendations_generated"] += 1
 
-        # First: new evidence gets full budget priority
-        if new_evidence:
-            sections.append("=== NEW EVIDENCE (not yet analyzed — MUST be covered in findings) ===")
-            for doc in new_evidence:
-                text = (doc.extracted_text or "").strip()
-                if not text:
-                    continue
-                doc_type = doc.document_type or "other"
-                header = f"[NEW] [{doc_type.upper()}] {doc.file_name}"
-                remaining = MAX_EVIDENCE_CHARS - total_chars
-                if remaining <= 200:
-                    sections.append(f"\n... ({len(new_evidence) - len([s for s in sections if '[NEW]' in s])} more new documents not included due to size limits)")
-                    break
-                if len(text) > remaining:
-                    text = text[:remaining] + f"\n... [truncated, {len(doc.extracted_text)} total chars]"
-                sections.append(f"--- {header} ---\n{text}")
-                total_chars += len(text) + len(header) + 10
+            except Exception as e:
+                logger.error(f"Error processing finding '{finding.get('vulnerability', '?')}': {e}")
+                results["errors"].append(str(e))
 
-        # Then: old evidence gets remaining budget (for AI context)
-        if old_evidence:
-            remaining_budget = MAX_EVIDENCE_CHARS - total_chars
-            if remaining_budget > 500:
-                sections.append("\n=== PREVIOUSLY ANALYZED EVIDENCE (for context only — do NOT duplicate findings) ===")
-                for doc in old_evidence:
-                    text = (doc.extracted_text or "").strip()
-                    if not text:
-                        continue
-                    doc_type = doc.document_type or "other"
-                    header = f"[PREVIOUSLY ANALYZED] [{doc_type.upper()}] {doc.file_name}"
-                    remaining = MAX_EVIDENCE_CHARS - total_chars
-                    if remaining <= 200:
-                        break
-                    # Summarize old evidence more aggressively
-                    max_old_chars = min(remaining, 3000)
-                    if len(text) > max_old_chars:
-                        text = text[:max_old_chars] + f"\n... [truncated summary]"
-                    sections.append(f"--- {header} ---\n{text}")
-                    total_chars += len(text) + len(header) + 10
+        db.commit()
 
-        return "\n\n".join(sections)
+    def _update_job_progress(
+        self, db: Session, job_id: str, results: Dict[str, Any]
+    ) -> None:
+        """Update the intelligence job with incremental progress."""
+        try:
+            job = db.query(IntelligenceJob).filter(IntelligenceJob.id == job_id).first()
+            if job:
+                job.results = dict(results)  # copy so SQLAlchemy detects the change
+                db.commit()
+        except Exception:
+            pass  # non-critical — don't let progress tracking break enrichment
 
     @staticmethod
     def _residual_from_score(score: int) -> str:

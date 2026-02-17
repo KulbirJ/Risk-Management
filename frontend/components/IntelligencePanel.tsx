@@ -43,6 +43,7 @@ export function IntelligencePanel({ assessmentId, onEnrichComplete }: Intelligen
   const [jobHistory, setJobHistory] = useState<IntelligenceJob[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [pollingJobId, setPollingJobId] = useState<string | null>(null);
+  const [progressText, setProgressText] = useState<string | null>(null);
 
   useEffect(() => {
     loadLastJob();
@@ -61,6 +62,7 @@ export function IntelligencePanel({ assessmentId, onEnrichComplete }: Intelligen
           clearInterval(interval);
           setPollingJobId(null);
           setEnriching(false);
+          setProgressText(null);
           const r = job.results || {};
           setEnrichResult({
             job_id: job.id,
@@ -83,9 +85,16 @@ export function IntelligencePanel({ assessmentId, onEnrichComplete }: Intelligen
           clearInterval(interval);
           setPollingJobId(null);
           setEnriching(false);
+          setProgressText(null);
           setError(`Enrichment failed: ${job.error_message || 'Unknown error'}`);
         }
-        // else still pending/running — keep polling
+        // else still pending/running — show progress if available
+        else {
+          const r = job.results || {} as any;
+          if (r.items_total && r.items_processed !== undefined) {
+            setProgressText(`Analyzing item ${r.items_processed + 1} of ${r.items_total}...`);
+          }
+        }
       } catch {
         // Network error during poll — keep trying
       }
@@ -129,6 +138,7 @@ export function IntelligencePanel({ assessmentId, onEnrichComplete }: Intelligen
       setError(null);
       setSuccess(null);
       setEnrichResult(null);
+      setProgressText(null);
 
       const result = await apiClient.enrichAssessment(assessmentId);
 
@@ -263,7 +273,7 @@ export function IntelligencePanel({ assessmentId, onEnrichComplete }: Intelligen
             {enriching ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Analyzing...
+                {progressText || 'Analyzing...'}
               </>
             ) : (
               <>

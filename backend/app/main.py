@@ -408,7 +408,8 @@ def _handle_async_enrichment(event):
         results = intelligence_service.enrich_assessment(
             db=db,
             assessment_id=assessment_id,
-            tenant_id=tenant_id
+            tenant_id=tenant_id,
+            job_id=job_id,
         )
 
         _logger.info(f"[ASYNC] enrich_assessment returned: status={results.get('status')}, threats={results.get('threats_mapped')}")
