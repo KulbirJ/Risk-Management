@@ -617,10 +617,12 @@ export default function AssessmentDetailPage() {
             Identified Threats ({threats.length})
           </h2>
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={(e: React.MouseEvent) => { e.stopPropagation(); setIsThreatModalOpen(true); }}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Threat
-            </Button>
+            <div onClick={(e) => e.stopPropagation()}>
+              <Button size="sm" onClick={() => { setIsThreatModalOpen(true); }}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Threat
+              </Button>
+            </div>
             <ChevronDown className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-transform duration-200 ${threatsExpanded ? 'rotate-0' : '-rotate-90'}`} />
           </div>
         </button>
