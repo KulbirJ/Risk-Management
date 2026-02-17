@@ -149,6 +149,33 @@ def update_threat(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+@router.post("/{threat_id}/promote", response_model=ThreatRead)
+def promote_threat(
+    threat_id: UUID,
+    db: Session = Depends(get_db),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context)
+):
+    """
+    Promote an AI-assessed threat to analyst-assessed.
+    This protects it from being cleared on future AI enrichment runs.
+    """
+    tenant_id, _ = context
+
+    threat = ThreatService.get_threat(db=db, threat_id=threat_id, tenant_id=tenant_id)
+    if not threat:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Threat {threat_id} not found"
+        )
+
+    from datetime import datetime
+    threat.detected_by = "analyst_assessed"
+    threat.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(threat)
+    return threat
+
+
 @router.delete("/{threat_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_threat(
     threat_id: UUID,

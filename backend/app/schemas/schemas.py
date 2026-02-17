@@ -103,6 +103,7 @@ class ThreatPatch(BaseModel):
     description: Optional[str] = None
     recommendation: Optional[str] = None
     status: Optional[str] = None
+    detected_by: Optional[str] = None
 
 
 class ThreatRead(ThreatBase):

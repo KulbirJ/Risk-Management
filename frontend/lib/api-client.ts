@@ -126,6 +126,11 @@ class APIClient {
     return data;
   }
 
+  async promoteThreat(id: string): Promise<Threat> {
+    const { data } = await this.client.post(`/threats/${id}/promote`);
+    return data;
+  }
+
   async deleteThreat(id: string): Promise<void> {
     await this.client.delete(`/threats/${id}`);
   }

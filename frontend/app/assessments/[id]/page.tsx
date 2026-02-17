@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield, Upload, FileText, Download, X, Check, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield, Upload, FileText, Download, X, Check, Loader2, RefreshCw, Sparkles, UserCheck } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { LoadingPage } from '../../../components/LoadingSpinner';
 import { Alert } from '../../../components/Alert';
@@ -210,6 +210,16 @@ export default function AssessmentDetailPage() {
       await loadAssessmentData(); // Reload to show remaining threats
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to delete threat');
+    }
+  };
+
+  const handlePromoteThreat = async (threatId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await apiClient.promoteThreat(threatId);
+      await loadAssessmentData();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to promote threat');
     }
   };
 
@@ -660,73 +670,64 @@ export default function AssessmentDetailPage() {
           </Button>
         </div>
       ) : (
-        <div className="space-y-4">
-          {threats.map((threat) => (
-            <div
-              key={threat.id}
-              className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md hover:border-primary transition-all cursor-pointer relative group"
-              onClick={() => openEditThreatModal(threat)}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {threat.title}
-                    {threat.detected_by === 'ai' && (
-                      <span className="ml-2 inline-block align-middle"><AiBadge /></span>
-                    )}
+        <>
+          {/* Analyst Assessed Section */}
+          {(() => {
+            const analystThreats = threats.filter(t => t.detected_by !== 'ai_intelligence');
+            if (analystThreats.length === 0) return null;
+            return (
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-1.5 bg-emerald-100 rounded-md">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <h3 className="text-base font-semibold text-gray-800">
+                    Analyst Assessed
                   </h3>
-                  <p className="text-sm text-gray-600 mt-1">{threat.description}</p>
-                  {threat.recommendation && (
-                    <div className="mt-2 p-2 bg-blue-50 border-l-2 border-blue-500 rounded">
-                      <span className="text-xs font-medium text-blue-700">Recommendation:</span>
-                      <p className="text-sm text-blue-900 mt-1">{threat.recommendation}</p>
-                    </div>
-                  )}
-                  {threat.ai_rationale && (
-                    <div className="mt-2 p-2 bg-indigo-50 border-l-2 border-indigo-400 rounded">
-                      <span className="text-xs font-medium text-indigo-700">AI Rationale:</span>
-                      <p className="text-sm text-indigo-900 mt-1">{threat.ai_rationale}</p>
-                    </div>
-                  )}
+                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">{analystThreats.length}</span>
+                  <span className="text-xs text-gray-500 ml-1">Protected from AI re-runs</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <SeverityBadge severity={threat.severity} />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteThreat(threat.id);
-                    }}
-                    className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                    title="Delete threat"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                <div className="space-y-4">
+                  {analystThreats.map((threat) => (
+                    <ThreatCard key={threat.id} threat={threat} onEdit={openEditThreatModal} onDelete={handleDeleteThreat} />
+                  ))}
                 </div>
               </div>
-              <div className="grid grid-cols-4 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">Status:</span>
-                  <p className="font-medium mt-1 capitalize">{threat.status.replace('_', ' ')}</p>
+            );
+          })()}
+
+          {/* AI Assessed Section */}
+          {(() => {
+            const aiThreats = threats.filter(t => t.detected_by === 'ai_intelligence');
+            if (aiThreats.length === 0) return null;
+            return (
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-1.5 bg-indigo-100 rounded-md">
+                    <Sparkles className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <h3 className="text-base font-semibold text-gray-800">
+                    AI Assessed
+                  </h3>
+                  <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">{aiThreats.length}</span>
+                  <span className="text-xs text-gray-500 ml-1">Will be refreshed on next AI enrichment</span>
                 </div>
-                <div>
-                  <span className="text-gray-500">Likelihood:</span>
-                  <p className="font-medium mt-1">{threat.likelihood}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Impact:</span>
-                  <p className="font-medium mt-1">{threat.impact}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">CVE IDs:</span>
-                  <p className="font-medium mt-1">{threat.cve_ids?.length || 0}</p>
+                <div className="space-y-4">
+                  {aiThreats.map((threat) => (
+                    <ThreatCard
+                      key={threat.id}
+                      threat={threat}
+                      onEdit={openEditThreatModal}
+                      onDelete={handleDeleteThreat}
+                      onPromote={handlePromoteThreat}
+                      showPromote
+                    />
+                  ))}
                 </div>
               </div>
-              <div className="absolute top-4 right-16 text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                Click to edit
-              </div>
-            </div>
-          ))}
-        </div>
+            );
+          })()}
+        </>
       )}
 
       <ThreatModal
@@ -753,5 +754,99 @@ function PriorityBadge({ priority }: { priority: string }) {
     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[priority] || 'bg-gray-100 text-gray-700'}`}>
       {priority}
     </span>
+  );
+}
+
+function ThreatCard({
+  threat,
+  onEdit,
+  onDelete,
+  onPromote,
+  showPromote = false,
+}: {
+  threat: Threat;
+  onEdit: (threat: Threat) => void;
+  onDelete: (id: string) => void;
+  onPromote?: (id: string, e: React.MouseEvent) => void;
+  showPromote?: boolean;
+}) {
+  return (
+    <div
+      className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md hover:border-primary transition-all cursor-pointer relative group"
+      onClick={() => onEdit(threat)}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1">
+          <h3 className="text-lg font-semibold text-gray-900">
+            {threat.title}
+            {threat.detected_by === 'ai_intelligence' && (
+              <span className="ml-2 inline-block align-middle"><AiBadge /></span>
+            )}
+            {threat.detected_by === 'analyst_assessed' && (
+              <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 border border-emerald-200 align-middle">
+                <UserCheck className="w-3 h-3" />
+                Analyst
+              </span>
+            )}
+          </h3>
+          <p className="text-sm text-gray-600 mt-1">{threat.description}</p>
+          {threat.recommendation && (
+            <div className="mt-2 p-2 bg-blue-50 border-l-2 border-blue-500 rounded">
+              <span className="text-xs font-medium text-blue-700">Recommendation:</span>
+              <p className="text-sm text-blue-900 mt-1">{threat.recommendation}</p>
+            </div>
+          )}
+          {threat.ai_rationale && (
+            <div className="mt-2 p-2 bg-indigo-50 border-l-2 border-indigo-400 rounded">
+              <span className="text-xs font-medium text-indigo-700">AI Rationale:</span>
+              <p className="text-sm text-indigo-900 mt-1">{threat.ai_rationale}</p>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <SeverityBadge severity={threat.severity} />
+          {showPromote && onPromote && (
+            <button
+              onClick={(e) => onPromote(threat.id, e)}
+              className="p-2 text-indigo-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+              title="Move to Analyst Assessed — protects from AI re-runs"
+            >
+              <UserCheck className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(threat.id);
+            }}
+            className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+            title="Delete threat"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-4 gap-4 text-sm">
+        <div>
+          <span className="text-gray-500">Status:</span>
+          <p className="font-medium mt-1 capitalize">{threat.status.replace('_', ' ')}</p>
+        </div>
+        <div>
+          <span className="text-gray-500">Likelihood:</span>
+          <p className="font-medium mt-1">{threat.likelihood}</p>
+        </div>
+        <div>
+          <span className="text-gray-500">Impact:</span>
+          <p className="font-medium mt-1">{threat.impact}</p>
+        </div>
+        <div>
+          <span className="text-gray-500">CVE IDs:</span>
+          <p className="font-medium mt-1">{threat.cve_ids?.length || 0}</p>
+        </div>
+      </div>
+      <div className="absolute top-4 right-16 text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+        Click to edit
+      </div>
+    </div>
   );
 }
