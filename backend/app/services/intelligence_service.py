@@ -32,6 +32,7 @@ class IntelligenceService:
         """
         Enrich an assessment with AI-generated insights using a single Bedrock call.
         """
+        logger.warning(f"[ENRICH] enrich_assessment called for {assessment_id}")
         assessment = db.query(Assessment).filter(
             Assessment.id == assessment_id,
             Assessment.tenant_id == tenant_id
@@ -40,7 +41,7 @@ class IntelligenceService:
         if not assessment:
             raise ValueError(f"Assessment {assessment_id} not found")
 
-        logger.info(f"Starting AI enrichment for assessment {assessment_id}")
+        logger.warning(f"[ENRICH] Assessment found: {assessment.title}")
 
         results = {
             "assessment_id": assessment_id,
@@ -269,13 +270,15 @@ The following evidence has been uploaded for this assessment. Use this informati
 
         prompt += "\n\nAnalyze this assessment and ALL evidence files. Return the comprehensive JSON analysis with findings from EVERY file."
 
-        logger.info(f"Calling Bedrock for assessment {assessment.id} (prompt length: {len(prompt)} chars, system prompt: {len(system_prompt)} chars)")
+        logger.warning(f"[ENRICH] Calling Bedrock (prompt: {len(prompt)} chars, system: {len(system_prompt)} chars)")
 
         response = self.bedrock.generate_structured_output(
             prompt=prompt,
             system_prompt=system_prompt,
             max_tokens=10000  # Nova Pro max is 10240; stay under limit
         )
+
+        logger.warning(f"[ENRICH] Bedrock returned: type={type(response).__name__}, is_none={response is None}")
 
         if not response:
             logger.warning(f"No response from Bedrock for assessment {assessment.id}. "

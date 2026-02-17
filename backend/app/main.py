@@ -376,6 +376,7 @@ app = create_app()
 def _handle_async_enrichment(event):
     """Handle async enrichment invoked via Lambda Event invocation."""
     import logging
+    import traceback
     from datetime import datetime
     from .db.database import SessionLocal
     from .services.intelligence_service import intelligence_service
@@ -388,7 +389,7 @@ def _handle_async_enrichment(event):
     assessment_id = event["assessment_id"]
     tenant_id = event["tenant_id"]
 
-    _logger.info(f"Async enrichment started for job {job_id}, assessment {assessment_id}")
+    _logger.info(f"[ASYNC] Started job={job_id}, assessment={assessment_id}")
 
     db = SessionLocal()
     try:
@@ -396,18 +397,21 @@ def _handle_async_enrichment(event):
             IntelligenceJob.id == job_id
         ).first()
         if not job:
-            _logger.error(f"Job {job_id} not found")
+            _logger.error(f"[ASYNC] Job {job_id} not found in DB")
             return {"status": "error", "message": "Job not found"}
 
         job.status = "running"
         job.started_at = datetime.utcnow()
         db.commit()
+        _logger.info(f"[ASYNC] Job {job_id} set to running, calling enrich_assessment")
 
         results = intelligence_service.enrich_assessment(
             db=db,
             assessment_id=assessment_id,
             tenant_id=tenant_id
         )
+
+        _logger.info(f"[ASYNC] enrich_assessment returned: status={results.get('status')}, threats={results.get('threats_mapped')}")
 
         job.status = results.get("status", "completed")
         job.completed_at = datetime.utcnow()
@@ -416,16 +420,16 @@ def _handle_async_enrichment(event):
             job.error_message = "; ".join(str(e) for e in results["errors"][:5])
         db.commit()
 
-        _logger.info(f"Async enrichment completed for job {job_id}: {job.status}")
+        _logger.info(f"[ASYNC] Job {job_id} completed: {job.status}")
         return {"status": job.status, "job_id": job_id}
 
     except Exception as e:
-        _logger.error(f"Async enrichment failed for job {job_id}: {e}")
+        _logger.error(f"[ASYNC] Job {job_id} FAILED: {e}\n{traceback.format_exc()}")
         try:
             if job:
                 job.status = "failed"
                 job.completed_at = datetime.utcnow()
-                job.error_message = str(e)
+                job.error_message = str(e)[:500]
                 db.commit()
         except Exception:
             pass
