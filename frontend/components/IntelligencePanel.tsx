@@ -42,10 +42,57 @@ export function IntelligencePanel({ assessmentId, onEnrichComplete }: Intelligen
   const [showHistory, setShowHistory] = useState(false);
   const [jobHistory, setJobHistory] = useState<IntelligenceJob[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [pollingJobId, setPollingJobId] = useState<string | null>(null);
 
   useEffect(() => {
     loadLastJob();
   }, [assessmentId]);
+
+  // Poll for job completion when a job is pending/running
+  useEffect(() => {
+    if (!pollingJobId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const job = await apiClient.getIntelligenceJob(pollingJobId);
+        setLastJob(job);
+
+        if (job.status === 'completed') {
+          clearInterval(interval);
+          setPollingJobId(null);
+          setEnriching(false);
+          const r = job.results || {};
+          setEnrichResult({
+            job_id: job.id,
+            assessment_id: job.assessment_id,
+            status: 'completed',
+            vulnerabilities_identified: r.vulnerabilities_identified || 0,
+            threats_mapped: r.threats_mapped || 0,
+            risks_created: r.risks_created || 0,
+            recommendations_generated: r.recommendations_generated || 0,
+            errors: [],
+            model_used: job.model_id || undefined,
+            started_at: job.started_at,
+            completed_at: job.completed_at,
+          });
+          setSuccess(
+            `AI analysis complete: ${r.threats_mapped || 0} threats, ${r.risks_created || 0} risks, ${r.recommendations_generated || 0} recommendations identified.`
+          );
+          onEnrichComplete();
+        } else if (job.status === 'failed') {
+          clearInterval(interval);
+          setPollingJobId(null);
+          setEnriching(false);
+          setError(`Enrichment failed: ${job.error_message || 'Unknown error'}`);
+        }
+        // else still pending/running — keep polling
+      } catch {
+        // Network error during poll — keep trying
+      }
+    }, 4000); // Poll every 4 seconds
+
+    return () => clearInterval(interval);
+  }, [pollingJobId]);
 
   const loadLastJob = async () => {
     try {
@@ -84,47 +131,58 @@ export function IntelligencePanel({ assessmentId, onEnrichComplete }: Intelligen
       setEnrichResult(null);
 
       const result = await apiClient.enrichAssessment(assessmentId);
-      setEnrichResult(result);
 
+      // If backend returned completed synchronously (fallback path), handle it
       if (result.status === 'completed') {
+        setEnrichResult(result);
         setSuccess(
           `AI analysis complete: ${result.threats_mapped} threats, ${result.risks_created} risks, ${result.recommendations_generated} recommendations identified.`
         );
+        setEnriching(false);
         onEnrichComplete();
+        await loadLastJob();
       } else if (result.status === 'failed') {
         setError(`Enrichment failed: ${result.errors?.join(', ') || 'Unknown error'}`);
+        setEnriching(false);
+        await loadLastJob();
+      } else {
+        // Async path: job is pending/running — start polling
+        setPollingJobId(result.job_id);
+        await loadLastJob();
       }
-
-      // Refresh last job
-      await loadLastJob();
     } catch (err: any) {
-      const status = err.response?.status;
+      const errStatus = err.response?.status;
       const detail = err.response?.data?.detail || 'Failed to start AI enrichment';
       
       // If 409 conflict (stuck job), auto-reset and retry once
-      if (status === 409) {
+      if (errStatus === 409) {
         try {
           await apiClient.resetIntelligenceJobs(assessmentId);
           const retryResult = await apiClient.enrichAssessment(assessmentId);
-          setEnrichResult(retryResult);
           if (retryResult.status === 'completed') {
+            setEnrichResult(retryResult);
             setSuccess(
               `AI analysis complete: ${retryResult.threats_mapped} threats, ${retryResult.risks_created} risks, ${retryResult.recommendations_generated} recommendations identified.`
             );
+            setEnriching(false);
             onEnrichComplete();
           } else if (retryResult.status === 'failed') {
             setError(`Enrichment failed: ${retryResult.errors?.join(', ') || 'Unknown error'}`);
+            setEnriching(false);
+          } else {
+            // Async path on retry
+            setPollingJobId(retryResult.job_id);
           }
           await loadLastJob();
           return;
         } catch (retryErr: any) {
           setError(retryErr.response?.data?.detail || 'Failed after auto-reset. Try again.');
+          setEnriching(false);
         }
       } else {
         setError(detail);
+        setEnriching(false);
       }
-    } finally {
-      setEnriching(false);
     }
   };
 

@@ -372,15 +372,84 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
+
+def _handle_async_enrichment(event):
+    """Handle async enrichment invoked via Lambda Event invocation."""
+    import logging
+    from datetime import datetime
+    from .db.database import SessionLocal
+    from .services.intelligence_service import intelligence_service
+    from .models.models import IntelligenceJob
+
+    _logger = logging.getLogger(__name__)
+    _logger.setLevel(logging.INFO)
+
+    job_id = event["job_id"]
+    assessment_id = event["assessment_id"]
+    tenant_id = event["tenant_id"]
+
+    _logger.info(f"Async enrichment started for job {job_id}, assessment {assessment_id}")
+
+    db = SessionLocal()
+    try:
+        job = db.query(IntelligenceJob).filter(
+            IntelligenceJob.id == job_id
+        ).first()
+        if not job:
+            _logger.error(f"Job {job_id} not found")
+            return {"status": "error", "message": "Job not found"}
+
+        job.status = "running"
+        job.started_at = datetime.utcnow()
+        db.commit()
+
+        results = intelligence_service.enrich_assessment(
+            db=db,
+            assessment_id=assessment_id,
+            tenant_id=tenant_id
+        )
+
+        job.status = results.get("status", "completed")
+        job.completed_at = datetime.utcnow()
+        job.results = results
+        if results.get("errors"):
+            job.error_message = "; ".join(str(e) for e in results["errors"][:5])
+        db.commit()
+
+        _logger.info(f"Async enrichment completed for job {job_id}: {job.status}")
+        return {"status": job.status, "job_id": job_id}
+
+    except Exception as e:
+        _logger.error(f"Async enrichment failed for job {job_id}: {e}")
+        try:
+            if job:
+                job.status = "failed"
+                job.completed_at = datetime.utcnow()
+                job.error_message = str(e)
+                db.commit()
+        except Exception:
+            pass
+        return {"status": "failed", "error": str(e)}
+    finally:
+        db.close()
+
+
 # AWS Lambda handler
 try:
     from mangum import Mangum
     # Configure Mangum for Lambda with optimizations
-    lambda_handler = Mangum(
+    _mangum_handler = Mangum(
         app,
         lifespan="off",  # Disable lifespan for Lambda cold starts
         api_gateway_base_path="/",  # API Gateway stage path
     )
+
+    def lambda_handler(event, context):
+        """Route Lambda events: async enrichment or API Gateway via Mangum."""
+        if isinstance(event, dict) and event.get("action") == "enrich_assessment":
+            return _handle_async_enrichment(event)
+        return _mangum_handler(event, context)
+
 except ImportError:
     # Mangum not installed, likely running locally
     lambda_handler = None

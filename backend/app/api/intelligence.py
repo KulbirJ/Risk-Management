@@ -1,4 +1,6 @@
 """Intelligence API router endpoints for AI enrichment."""
+import json
+import logging
 from uuid import UUID
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -15,6 +17,8 @@ from ..schemas.schemas import (
 from ..services.intelligence_service import intelligence_service
 from ..models.models import IntelligenceJob, Assessment, ThreatCatalogue
 from ..core.config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -105,46 +109,65 @@ def enrich_assessment(
         tenant_id=tenant_id,
         assessment_id=request.assessment_id,
         initiated_by_id=user_id,
-        status="running",
+        status="pending",
         job_type=request.job_type,
         model_id=settings.bedrock_model_id,
-        started_at=datetime.utcnow()
     )
     db.add(job)
     db.commit()
     db.refresh(job)
 
-    # Run enrichment synchronously (Lambda doesn't support background tasks)
+    # Invoke Lambda asynchronously to avoid API Gateway 30s timeout
     try:
-        results = intelligence_service.enrich_assessment(
-            db=db,
-            assessment_id=str(request.assessment_id),
-            tenant_id=str(tenant_id)
+        import boto3
+        lambda_client = boto3.client('lambda', region_name=settings.aws_region)
+        payload = {
+            "action": "enrich_assessment",
+            "job_id": str(job.id),
+            "assessment_id": str(request.assessment_id),
+            "tenant_id": str(tenant_id),
+            "user_id": str(user_id),
+        }
+        lambda_client.invoke(
+            FunctionName="compliance-platform-api",
+            InvocationType="Event",  # Async invocation
+            Payload=json.dumps(payload),
         )
-
-        job.status = results.get("status", "completed")
-        job.completed_at = datetime.utcnow()
-        job.results = results
-        if results.get("errors"):
-            job.error_message = "; ".join(str(e) for e in results["errors"][:5])
-        db.commit()
-
+        logger.info(f"Async enrichment invoked for job {job.id}")
     except Exception as e:
-        job.status = "failed"
-        job.completed_at = datetime.utcnow()
-        job.error_message = str(e)
-        db.commit()
-        results = {"errors": [str(e)]}
+        # Fallback: run synchronously if async invocation fails
+        logger.warning(f"Async invoke failed, running synchronously: {e}")
+        try:
+            job.status = "running"
+            job.started_at = datetime.utcnow()
+            db.commit()
+
+            results = intelligence_service.enrich_assessment(
+                db=db,
+                assessment_id=str(request.assessment_id),
+                tenant_id=str(tenant_id)
+            )
+            job.status = results.get("status", "completed")
+            job.completed_at = datetime.utcnow()
+            job.results = results
+            if results.get("errors"):
+                job.error_message = "; ".join(str(e2) for e2 in results["errors"][:5])
+            db.commit()
+        except Exception as e2:
+            job.status = "failed"
+            job.completed_at = datetime.utcnow()
+            job.error_message = str(e2)
+            db.commit()
 
     return IntelligenceEnrichResponse(
         job_id=job.id,
         assessment_id=request.assessment_id,
         status=job.status,
-        vulnerabilities_identified=results.get("vulnerabilities_identified", 0),
-        threats_mapped=results.get("threats_mapped", 0),
-        risks_created=results.get("risks_created", 0),
-        recommendations_generated=results.get("recommendations_generated", 0),
-        errors=results.get("errors", []),
+        vulnerabilities_identified=0,
+        threats_mapped=0,
+        risks_created=0,
+        recommendations_generated=0,
+        errors=[],
         model_used=settings.bedrock_model_id,
         started_at=job.started_at,
         completed_at=job.completed_at
