@@ -318,7 +318,7 @@ The following evidence has been uploaded for this assessment. Use this informati
         if not new_evidence and not (old_evidence or []):
             return ""
 
-        MAX_EVIDENCE_CHARS = 50000  # ~12K tokens, enough for multiple large files
+        MAX_EVIDENCE_CHARS = 20000  # ~5K tokens; keeps Bedrock processing under 60s
         sections = []
         total_chars = 0
 

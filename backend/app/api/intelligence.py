@@ -79,7 +79,7 @@ def enrich_assessment(
         )
 
     # Auto-expire stuck jobs older than 5 minutes
-    stuck_cutoff = datetime.utcnow() - timedelta(minutes=1)
+    stuck_cutoff = datetime.utcnow() - timedelta(minutes=5)
     stuck_jobs = db.query(IntelligenceJob).filter(
         IntelligenceJob.assessment_id == request.assessment_id,
         IntelligenceJob.status.in_(["pending", "running"]),
