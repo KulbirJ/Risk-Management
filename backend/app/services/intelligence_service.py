@@ -1,6 +1,6 @@
 """Intelligence service for AI-powered assessment enrichment.
 
-Uses a SINGLE Bedrock call to stay within API Gateway's 29-second timeout.
+Uses async Lambda self-invocation with a SINGLE Bedrock call.
 """
 import json
 import logging
@@ -32,7 +32,7 @@ class IntelligenceService:
         """
         Enrich an assessment with AI-generated insights using a single Bedrock call.
         """
-        logger.warning(f"[ENRICH] enrich_assessment called for {assessment_id}")
+        logger.info(f"Enriching assessment {assessment_id}")
         assessment = db.query(Assessment).filter(
             Assessment.id == assessment_id,
             Assessment.tenant_id == tenant_id
@@ -41,7 +41,7 @@ class IntelligenceService:
         if not assessment:
             raise ValueError(f"Assessment {assessment_id} not found")
 
-        logger.warning(f"[ENRICH] Assessment found: {assessment.title}")
+        logger.info(f"Assessment found: {assessment.title}")
 
         results = {
             "assessment_id": assessment_id,
@@ -270,7 +270,7 @@ The following evidence has been uploaded for this assessment. Use this informati
 
         prompt += "\n\nAnalyze this assessment and ALL evidence files. Return the comprehensive JSON analysis with findings from EVERY file."
 
-        logger.warning(f"[ENRICH] Calling Bedrock (prompt: {len(prompt)} chars, system: {len(system_prompt)} chars)")
+        logger.info(f"Calling Bedrock (prompt: {len(prompt)} chars, system: {len(system_prompt)} chars)")
 
         response = self.bedrock.generate_structured_output(
             prompt=prompt,
@@ -278,7 +278,7 @@ The following evidence has been uploaded for this assessment. Use this informati
             max_tokens=10000  # Nova Pro max is 10240; stay under limit
         )
 
-        logger.warning(f"[ENRICH] Bedrock returned: type={type(response).__name__}, is_none={response is None}")
+        logger.info(f"Bedrock returned response (type={type(response).__name__})")
 
         if not response:
             logger.warning(f"No response from Bedrock for assessment {assessment.id}. "
