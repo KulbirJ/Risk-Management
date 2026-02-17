@@ -43,7 +43,7 @@ export interface Threat {
   title: string;
   description?: string;
   recommendation?: string;
-  detected_by: 'scan' | 'diagram' | 'manual' | 'ai';
+  detected_by: 'scan' | 'diagram' | 'manual' | 'ai' | 'ai_intelligence' | 'analyst_assessed';
   cve_ids: string[];
   cvss_score?: string;
   likelihood: 'Low' | 'Medium' | 'High' | 'Critical';
