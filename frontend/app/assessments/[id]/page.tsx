@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield, Upload, FileText, Download, X, Check, Loader2, RefreshCw, Sparkles, UserCheck } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield, Upload, FileText, Download, X, Check, Loader2, RefreshCw, Sparkles, UserCheck, ChevronDown } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { LoadingPage } from '../../../components/LoadingSpinner';
 import { Alert } from '../../../components/Alert';
@@ -43,6 +43,8 @@ export default function AssessmentDetailPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [recommendationsExpanded, setRecommendationsExpanded] = useState(false);
+  const [threatsExpanded, setThreatsExpanded] = useState(false);
 
   const ALLOWED_TYPES = [
     'application/pdf',
@@ -608,11 +610,17 @@ export default function AssessmentDetailPage() {
       {/* Recommendations from AI */}
       {recommendations.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Lightbulb className="w-5 h-5 text-green-500" />
-            Recommendations ({recommendations.length})
-          </h2>
-          <div className="space-y-3">
+          <button
+            onClick={() => setRecommendationsExpanded(!recommendationsExpanded)}
+            className="w-full flex items-center justify-between py-3 px-1 group"
+          >
+            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+              <Lightbulb className="w-5 h-5 text-green-500" />
+              Recommendations ({recommendations.length})
+            </h2>
+            <ChevronDown className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-transform duration-200 ${recommendationsExpanded ? 'rotate-0' : '-rotate-90'}`} />
+          </button>
+          {recommendationsExpanded && <div className="space-y-3 mt-2">
             {recommendations.map((rec) => (
               <div
                 key={rec.id}
@@ -647,20 +655,31 @@ export default function AssessmentDetailPage() {
                 )}
               </div>
             ))}
-          </div>
+          </div>}
         </div>
       )}
 
       {/* Threats List */}
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold text-gray-900">Identified Threats</h2>
-        <Button size="sm" onClick={() => setIsThreatModalOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Threat
-        </Button>
+      <div className="mb-6">
+        <button
+          onClick={() => setThreatsExpanded(!threatsExpanded)}
+          className="w-full flex items-center justify-between py-3 px-1 group"
+        >
+          <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
+            Identified Threats ({threats.length})
+          </h2>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={(e: React.MouseEvent) => { e.stopPropagation(); setIsThreatModalOpen(true); }}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Threat
+            </Button>
+            <ChevronDown className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-transform duration-200 ${threatsExpanded ? 'rotate-0' : '-rotate-90'}`} />
+          </div>
+        </button>
       </div>
 
-      {threats.length === 0 ? (
+      {threatsExpanded && (threats.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
           <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
           <p className="text-gray-600 mb-4">No threats identified yet</p>
@@ -728,7 +747,7 @@ export default function AssessmentDetailPage() {
             );
           })()}
         </>
-      )}
+      ))}
 
       <ThreatModal
         isOpen={isThreatModalOpen}
