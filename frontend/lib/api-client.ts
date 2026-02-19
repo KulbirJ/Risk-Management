@@ -10,7 +10,14 @@ import type {
   IntelligenceEnrichRequest,
   IntelligenceEnrichResponse,
   IntelligenceJob,
-  IntelligenceStatus
+  IntelligenceStatus,
+  AttackTactic,
+  AttackTechnique,
+  AttackTechniqueSummary,
+  ThreatAttackMapping,
+  AutoMapResponse,
+  KillChain,
+  AttackSyncStatus,
 } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -301,6 +308,104 @@ class APIClient {
       params: { assessment_id: assessmentId },
     });
     return data;
+  }
+
+  // ─── MITRE ATT&CK ───────────────────────────────────────────────
+
+  // Reference data
+  async getAttackTactics(): Promise<AttackTactic[]> {
+    const { data } = await this.client.get('/attack/tactics');
+    return data;
+  }
+
+  async getTechniquesByTactic(
+    tacticId: string,
+    includeSubtechniques = false,
+  ): Promise<AttackTechnique[]> {
+    const { data } = await this.client.get(
+      `/attack/tactics/${tacticId}/techniques`,
+      { params: { include_subtechniques: includeSubtechniques } },
+    );
+    return data;
+  }
+
+  async searchAttackTechniques(q: string, limit = 30): Promise<AttackTechniqueSummary[]> {
+    const { data } = await this.client.get('/attack/techniques/search', {
+      params: { q, limit },
+    });
+    return data;
+  }
+
+  async getAttackTechnique(techniqueId: string): Promise<AttackTechnique> {
+    const { data } = await this.client.get(`/attack/techniques/${techniqueId}`);
+    return data;
+  }
+
+  // Sync
+  async getAttackSyncStatus(): Promise<AttackSyncStatus> {
+    const { data } = await this.client.get('/attack/sync-status');
+    return data;
+  }
+
+  async triggerAttackSync(): Promise<AttackSyncStatus> {
+    const { data } = await this.client.post('/attack/sync');
+    return data;
+  }
+
+  // Threat ↔ technique mappings
+  async getThreatMappings(threatId: string): Promise<ThreatAttackMapping[]> {
+    const { data } = await this.client.get(`/attack/threats/${threatId}/mappings`);
+    return data;
+  }
+
+  async addThreatMapping(
+    threatId: string,
+    techniqueId: string,
+    confidenceScore = 70,
+    mappingRationale?: string,
+  ): Promise<ThreatAttackMapping> {
+    const { data } = await this.client.post(`/attack/threats/${threatId}/mappings`, {
+      technique_id: techniqueId,
+      confidence_score: confidenceScore,
+      mapping_rationale: mappingRationale,
+    });
+    return data;
+  }
+
+  async autoMapThreat(
+    threatId: string,
+    options: { save_suggestions?: boolean; confidence_threshold?: number } = {},
+  ): Promise<AutoMapResponse> {
+    const { data } = await this.client.post(`/attack/threats/${threatId}/auto-map`, {
+      save_suggestions: options.save_suggestions ?? true,
+      confidence_threshold: options.confidence_threshold ?? 60,
+    });
+    return data;
+  }
+
+  async removeThreatMapping(threatId: string, techniqueId: string): Promise<void> {
+    await this.client.delete(`/attack/threats/${threatId}/mappings/${techniqueId}`);
+  }
+
+  // Kill chains
+  async getKillChains(threatId: string): Promise<KillChain[]> {
+    const { data } = await this.client.get(`/attack/threats/${threatId}/kill-chains`);
+    return data;
+  }
+
+  async generateKillChain(
+    threatId: string,
+    options: { threat_actor?: string; include_detection_hints?: boolean } = {},
+  ): Promise<KillChain> {
+    const { data } = await this.client.post(`/attack/threats/${threatId}/kill-chains`, {
+      threat_actor: options.threat_actor,
+      include_detection_hints: options.include_detection_hints ?? true,
+    });
+    return data;
+  }
+
+  async deleteKillChain(killChainId: string): Promise<void> {
+    await this.client.delete(`/attack/kill-chains/${killChainId}`);
   }
 }
 

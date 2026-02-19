@@ -102,6 +102,8 @@ class Threat(Base):
     evidence = relationship("Evidence", back_populates="threat")
     recommendations = relationship("Recommendation", back_populates="threat")
     active_risk = relationship("ActiveRisk", back_populates="threat", uselist=False)
+    attack_mappings = relationship("ThreatAttackMapping", back_populates="threat", cascade="all, delete-orphan")
+    kill_chains = relationship("KillChain", back_populates="threat", cascade="all, delete-orphan")
 
 
 class Evidence(Base):
@@ -244,5 +246,132 @@ class IntelligenceJob(Base):
     error_message = Column(Text, nullable=True)
     results = Column(JSONB, nullable=True)  # {vulnerabilities_found: 5, threats_mapped: 8, ...}
     extra_data = Column(JSONB, default={})  # Additional job metadata
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+# ─────────────────────────────────────────────────────────────────
+# MITRE ATT&CK Integration Models
+# ─────────────────────────────────────────────────────────────────
+
+class AttackTactic(Base):
+    """MITRE ATT&CK Tactic (e.g., Initial Access, Execution, Persistence)."""
+    __tablename__ = "attack_tactics"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    stix_id = Column(String(255), unique=True, nullable=False)      # stix id from MITRE
+    mitre_id = Column(String(50), nullable=False, index=True)        # e.g. "TA0001"
+    name = Column(String(255), nullable=False)                       # e.g. "Initial Access"
+    shortname = Column(String(100), nullable=False, index=True)      # e.g. "initial-access"
+    description = Column(Text, nullable=True)
+    url = Column(String(512), nullable=True)
+    last_synced_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    techniques = relationship("AttackTechnique", back_populates="tactic")
+
+
+class AttackTechnique(Base):
+    """MITRE ATT&CK Technique or Sub-technique (e.g., Phishing T1566)."""
+    __tablename__ = "attack_techniques"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    stix_id = Column(String(255), unique=True, nullable=False)       # stix id from MITRE
+    mitre_id = Column(String(50), nullable=False, index=True)        # e.g. "T1566" or "T1566.001"
+    name = Column(String(255), nullable=False)                       # e.g. "Phishing"
+    tactic_id = Column(UUID(as_uuid=True), ForeignKey("attack_tactics.id"), nullable=True, index=True)
+    tactic_shortname = Column(String(100), nullable=True)            # denormalized for fast lookups
+    description = Column(Text, nullable=True)
+    platforms = Column(JSONB, default=[])                            # ["Windows", "Linux", "macOS", ...]
+    data_sources = Column(JSONB, default=[])                         # ["Email logs", ...]
+    mitigations = Column(JSONB, default=[])                          # cached mitigation texts
+    url = Column(String(512), nullable=True)
+    is_subtechnique = Column(Boolean, default=False)
+    parent_technique_id = Column(UUID(as_uuid=True), ForeignKey("attack_techniques.id"), nullable=True)
+    is_deprecated = Column(Boolean, default=False)
+    last_synced_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    tactic = relationship("AttackTactic", back_populates="techniques")
+    threat_mappings = relationship("ThreatAttackMapping", back_populates="technique")
+    subtechniques = relationship("AttackTechnique",
+                                  foreign_keys=[parent_technique_id],
+                                  backref="parent_technique")
+
+
+class ThreatAttackMapping(Base):
+    """Junction table linking a Threat record to one or more ATT&CK Techniques."""
+    __tablename__ = "threat_attack_mappings"
+    __table_args__ = (UniqueConstraint("threat_id", "technique_id", name="uq_threat_technique"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    threat_id = Column(UUID(as_uuid=True), ForeignKey("threats.id"), nullable=False, index=True)
+    technique_id = Column(UUID(as_uuid=True), ForeignKey("attack_techniques.id"), nullable=False, index=True)
+    confidence_score = Column(Integer, default=70)    # 0-100; AI sets this, user can adjust
+    auto_mapped = Column(Boolean, default=False)      # True = AI suggestion, False = manual
+    mapping_rationale = Column(Text, nullable=True)   # AI explanation or user note
+    created_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    threat = relationship("Threat", back_populates="attack_mappings")
+    technique = relationship("AttackTechnique", back_populates="threat_mappings")
+    created_by_user = relationship("User")
+
+
+class KillChain(Base):
+    """AI-generated attack scenario / kill chain for a specific threat."""
+    __tablename__ = "kill_chains"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    threat_id = Column(UUID(as_uuid=True), ForeignKey("threats.id"), nullable=False, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    scenario_name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    threat_actor = Column(String(255), nullable=True)    # e.g. "APT29", "Ransomware group"
+    generated_by_ai = Column(Boolean, default=True)
+    model_id = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    threat = relationship("Threat", back_populates="kill_chains")
+    stages = relationship("KillChainStage", back_populates="kill_chain",
+                          cascade="all, delete-orphan",
+                          order_by="KillChainStage.stage_number")
+
+
+class KillChainStage(Base):
+    """A single stage/step within an attack kill chain scenario."""
+    __tablename__ = "kill_chain_stages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    kill_chain_id = Column(UUID(as_uuid=True), ForeignKey("kill_chains.id"), nullable=False, index=True)
+    technique_id = Column(UUID(as_uuid=True), ForeignKey("attack_techniques.id"), nullable=True)
+    stage_number = Column(Integer, nullable=False)
+    tactic_name = Column(String(100), nullable=False)    # e.g. "Initial Access"
+    technique_name = Column(String(255), nullable=True)  # e.g. "Spearphishing Link"
+    mitre_id = Column(String(50), nullable=True)         # e.g. "T1566.002"
+    description = Column(Text, nullable=True)
+    actor_behavior = Column(Text, nullable=True)         # What the attacker does
+    detection_hint = Column(Text, nullable=True)         # How to detect this stage
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    kill_chain = relationship("KillChain", back_populates="stages")
+    technique = relationship("AttackTechnique")
+
+
+class AttackSyncStatus(Base):
+    """Tracks the status and metadata of the last MITRE ATT&CK data sync."""
+    __tablename__ = "attack_sync_status"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    sync_status = Column(String(50), default="never")    # never, running, completed, failed
+    last_synced_at = Column(DateTime(timezone=True), nullable=True)
+    tactics_count = Column(Integer, default=0)
+    techniques_count = Column(Integer, default=0)
+    source_url = Column(String(512), nullable=True)
+    error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

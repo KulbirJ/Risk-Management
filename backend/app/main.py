@@ -111,7 +111,9 @@ def create_app() -> FastAPI:
         from .db.database import SessionLocal, engine, Base
         from .models.models import (
             Tenant, User, Assessment, Threat, Evidence,
-            Recommendation, ActiveRisk, AuditLog, ThreatCatalogue, IntelligenceJob
+            Recommendation, ActiveRisk, AuditLog, ThreatCatalogue, IntelligenceJob,
+            AttackTactic, AttackTechnique, ThreatAttackMapping,
+            KillChain, KillChainStage, AttackSyncStatus,
         )
         
         db = SessionLocal()
@@ -248,6 +250,65 @@ def create_app() -> FastAPI:
                 ("intelligence_jobs", "extra_data", "JSONB DEFAULT '{}'"),
                 ("intelligence_jobs", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 ("intelligence_jobs", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ ATTACK_TACTICS TABLE (MITRE ATT&CK) ============
+                ("attack_tactics", "stix_id", "VARCHAR(255)"),
+                ("attack_tactics", "mitre_id", "VARCHAR(50)"),
+                ("attack_tactics", "name", "VARCHAR(255)"),
+                ("attack_tactics", "shortname", "VARCHAR(100)"),
+                ("attack_tactics", "description", "TEXT"),
+                ("attack_tactics", "url", "VARCHAR(512)"),
+                ("attack_tactics", "last_synced_at", "TIMESTAMP WITH TIME ZONE"),
+                ("attack_tactics", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ ATTACK_TECHNIQUES TABLE ============
+                ("attack_techniques", "stix_id", "VARCHAR(255)"),
+                ("attack_techniques", "mitre_id", "VARCHAR(50)"),
+                ("attack_techniques", "name", "VARCHAR(255)"),
+                ("attack_techniques", "tactic_shortname", "VARCHAR(100)"),
+                ("attack_techniques", "description", "TEXT"),
+                ("attack_techniques", "platforms", "JSONB DEFAULT '[]'"),
+                ("attack_techniques", "data_sources", "JSONB DEFAULT '[]'"),
+                ("attack_techniques", "mitigations", "JSONB DEFAULT '[]'"),
+                ("attack_techniques", "url", "VARCHAR(512)"),
+                ("attack_techniques", "is_subtechnique", "BOOLEAN DEFAULT FALSE"),
+                ("attack_techniques", "is_deprecated", "BOOLEAN DEFAULT FALSE"),
+                ("attack_techniques", "last_synced_at", "TIMESTAMP WITH TIME ZONE"),
+                ("attack_techniques", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ THREAT_ATTACK_MAPPINGS TABLE ============
+                ("threat_attack_mappings", "confidence_score", "INTEGER DEFAULT 70"),
+                ("threat_attack_mappings", "auto_mapped", "BOOLEAN DEFAULT FALSE"),
+                ("threat_attack_mappings", "mapping_rationale", "TEXT"),
+                ("threat_attack_mappings", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ KILL_CHAINS TABLE ============
+                ("kill_chains", "scenario_name", "VARCHAR(255)"),
+                ("kill_chains", "description", "TEXT"),
+                ("kill_chains", "threat_actor", "VARCHAR(255)"),
+                ("kill_chains", "generated_by_ai", "BOOLEAN DEFAULT TRUE"),
+                ("kill_chains", "model_id", "VARCHAR(255)"),
+                ("kill_chains", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ KILL_CHAIN_STAGES TABLE ============
+                ("kill_chain_stages", "stage_number", "INTEGER"),
+                ("kill_chain_stages", "tactic_name", "VARCHAR(100)"),
+                ("kill_chain_stages", "technique_name", "VARCHAR(255)"),
+                ("kill_chain_stages", "mitre_id", "VARCHAR(50)"),
+                ("kill_chain_stages", "description", "TEXT"),
+                ("kill_chain_stages", "actor_behavior", "TEXT"),
+                ("kill_chain_stages", "detection_hint", "TEXT"),
+                ("kill_chain_stages", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ ATTACK_SYNC_STATUS TABLE ============
+                ("attack_sync_status", "sync_status", "VARCHAR(50) DEFAULT 'never'"),
+                ("attack_sync_status", "last_synced_at", "TIMESTAMP WITH TIME ZONE"),
+                ("attack_sync_status", "tactics_count", "INTEGER DEFAULT 0"),
+                ("attack_sync_status", "techniques_count", "INTEGER DEFAULT 0"),
+                ("attack_sync_status", "source_url", "VARCHAR(512)"),
+                ("attack_sync_status", "error_message", "TEXT"),
+                ("attack_sync_status", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                ("attack_sync_status", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
             ]
             
             for table_name, column_name, column_def in schema_updates:
@@ -325,7 +386,7 @@ def create_app() -> FastAPI:
             return {"status": "error", "message": str(e)}
 
     # Include API routers
-    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence
+    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack
     
     app.include_router(
         assessments.router,
@@ -361,6 +422,11 @@ def create_app() -> FastAPI:
         intelligence.router,
         prefix="/api/v1/intelligence",
         tags=["intelligence"]
+    )
+    app.include_router(
+        attack.router,
+        prefix="/api/v1/attack",
+        tags=["attack"]
     )
     
     # Future routers (Phase 2+)

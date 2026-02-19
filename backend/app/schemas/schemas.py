@@ -322,3 +322,147 @@ class IntelligenceStatusResponse(BaseModel):
     fallback_model: str
     bedrock_region: str
     confidence_threshold: float
+
+
+# ─────────────────────────────────────────────────────────────────
+# MITRE ATT&CK Schemas
+# ─────────────────────────────────────────────────────────────────
+
+class AttackTacticRead(BaseModel):
+    id: UUID
+    stix_id: str
+    mitre_id: str
+    name: str
+    shortname: str
+    description: Optional[str] = None
+    url: Optional[str] = None
+    technique_count: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AttackTechniqueRead(BaseModel):
+    id: UUID
+    stix_id: str
+    mitre_id: str
+    name: str
+    tactic_id: Optional[UUID] = None
+    tactic_shortname: Optional[str] = None
+    description: Optional[str] = None
+    platforms: List[str] = []
+    data_sources: List[str] = []
+    mitigations: List[str] = []
+    url: Optional[str] = None
+    is_subtechnique: bool = False
+    is_deprecated: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class AttackTechniqueSummary(BaseModel):
+    """Lightweight technique summary for dropdowns / suggestions."""
+    id: UUID
+    mitre_id: str
+    name: str
+    tactic_shortname: Optional[str] = None
+    is_subtechnique: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+# Threat ↔ ATT&CK mapping schemas
+class ThreatAttackMappingCreate(BaseModel):
+    technique_id: UUID
+    confidence_score: Optional[int] = 70    # 0-100
+    mapping_rationale: Optional[str] = None
+    auto_mapped: bool = False
+
+
+class ThreatAttackMappingRead(BaseModel):
+    id: UUID
+    threat_id: UUID
+    technique_id: UUID
+    technique: AttackTechniqueRead
+    confidence_score: int
+    auto_mapped: bool
+    mapping_rationale: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AutoMapRequest(BaseModel):
+    """Request body to trigger auto-mapping for a threat."""
+    save_suggestions: bool = True          # Auto-save suggestions above threshold
+    confidence_threshold: int = 60         # 0-100
+
+
+class AutoMapSuggestion(BaseModel):
+    """Single auto-mapping suggestion from AI."""
+    technique_id: Optional[UUID] = None
+    mitre_id: str
+    technique_name: str
+    confidence_score: int
+    mapping_rationale: str
+    tactic_shortname: Optional[str] = None
+
+
+class AutoMapResponse(BaseModel):
+    suggestions: List[AutoMapSuggestion]
+    saved_count: int
+    threat_id: UUID
+
+
+# Kill chain schemas
+class KillChainStageRead(BaseModel):
+    id: UUID
+    stage_number: int
+    tactic_name: str
+    technique_name: Optional[str] = None
+    mitre_id: Optional[str] = None
+    description: Optional[str] = None
+    actor_behavior: Optional[str] = None
+    detection_hint: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class KillChainRead(BaseModel):
+    id: UUID
+    threat_id: UUID
+    tenant_id: UUID
+    scenario_name: str
+    description: Optional[str] = None
+    threat_actor: Optional[str] = None
+    generated_by_ai: bool
+    model_id: Optional[str] = None
+    stages: List[KillChainStageRead] = []
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class KillChainGenerateRequest(BaseModel):
+    """Optional parameters passed when generating a kill chain."""
+    threat_actor: Optional[str] = None     # e.g. "APT29", leave blank for generic
+    include_detection_hints: bool = True
+
+
+# Sync status schema
+class AttackSyncStatusRead(BaseModel):
+    id: Optional[UUID] = None
+    sync_status: str
+    last_synced_at: Optional[datetime] = None
+    tactics_count: int = 0
+    techniques_count: int = 0
+    source_url: Optional[str] = None
+    error_message: Optional[str] = None
+
+    class Config:
+        from_attributes = True

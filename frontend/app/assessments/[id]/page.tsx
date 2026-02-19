@@ -10,6 +10,7 @@ import { Alert } from '../../../components/Alert';
 import { StatusBadge, SeverityBadge } from '../../../components/Badge';
 import { ThreatModal, ThreatFormData } from '../../../components/ThreatModal';
 import { IntelligencePanel, AiBadge } from '../../../components/IntelligencePanel';
+import { AttackContextPanel } from '../../../components/AttackContextPanel';
 import apiClient from '../../../lib/api-client';
 import { Assessment, Threat, ActiveRisk, Recommendation, Evidence } from '../../../lib/types';
 import { format } from 'date-fns';
@@ -853,6 +854,9 @@ function ThreatCard({
           </button>
         </div>
       )}
+
+      {/* ATT&CK Context */}
+      <AttackContextPanel threatId={threat.id} threatTitle={threat.title} />
     </div>
   );
 }

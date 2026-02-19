@@ -89,6 +89,14 @@ class Settings(BaseSettings):
     intelligence_confidence_threshold: float = 0.7
     openai_api_key: Optional[str] = None
 
+    # MITRE ATT&CK Integration
+    attack_taxii_url: str = "https://attack-taxii.mitre.org/api/v21/collections/1f5f1533-f617-4ca8-9ab4-6a02367fa019/objects/"
+    attack_stix_bundle_url: str = "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json"
+    attack_cache_ttl_days: int = 7             # How often to refresh cached ATT&CK data
+    attack_auto_map_confidence_threshold: int = 60   # 0-100; suggestions below this are not auto-saved
+    attack_max_techniques_per_prompt: int = 60 # Limit techniques sent to Bedrock per call
+    attack_sync_enabled: bool = True
+
     class Config:
         env_file = ".env"
         case_sensitive = False

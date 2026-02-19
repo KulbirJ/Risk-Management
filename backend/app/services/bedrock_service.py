@@ -311,6 +311,206 @@ class BedrockService:
         required_keys = schema.get('required', [])
         return all(key in data for key in required_keys)
 
+    # ------------------------------------------------------------------
+    # MITRE ATT&CK – technique mapping
+    # ------------------------------------------------------------------
+
+    def map_threat_to_attack_techniques(
+        self,
+        threat_title: str,
+        threat_description: str,
+        candidate_techniques: List[Dict[str, Any]],
+        confidence_threshold: int = 60,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        Ask Bedrock to map a threat to MITRE ATT&CK techniques.
+
+        candidate_techniques is a list of dicts with keys:
+          id, mitre_id, name, tactic_shortname, description
+
+        Returns a list of dicts:
+          {technique_id, mitre_id, technique_name, tactic_shortname,
+           confidence_score (0-100), mapping_rationale}
+        """
+        if not self.enabled or not self.client:
+            logger.warning("Bedrock disabled – skipping ATT&CK mapping")
+            return None
+
+        techniques_context = "\n".join(
+            f"- [{t['mitre_id']}] {t['name']} (tactic: {t.get('tactic_shortname', 'unknown')}): "
+            f"{(t.get('description') or '')[:120]}"
+            for t in candidate_techniques
+        )
+
+        system_prompt = """You are a MITRE ATT&CK mapping expert.
+Given a cybersecurity threat, identify the most relevant ATT&CK techniques from the provided list.
+
+Return valid JSON only – no markdown, no extra text:
+{
+  "mappings": [
+    {
+      "mitre_id": "T1566",
+      "technique_name": "Phishing",
+      "tactic_shortname": "initial-access",
+      "confidence_score": 85,
+      "mapping_rationale": "The threat involves email-based deception matching phishing technique"
+    }
+  ]
+}
+
+Rules:
+- Return 2-6 mappings maximum
+- confidence_score must be an integer 0-100
+- Only include techniques from the provided list
+- Only include mappings with confidence >= """ + str(confidence_threshold) + """
+- Return ONLY valid JSON"""
+
+        user_prompt = f"""Threat: {threat_title}
+
+Description: {threat_description or 'No description provided'}
+
+Available ATT&CK techniques:
+{techniques_context}
+
+Map this threat to the most relevant techniques above."""
+
+        try:
+            raw = self.invoke_model(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                max_tokens=2000,
+                temperature=0.2,
+            )
+            if not raw:
+                return None
+
+            data = self._extract_json(raw)
+            if not data:
+                return None
+
+            mappings = data.get("mappings", [])
+            logger.info(f"ATT&CK mapping returned {len(mappings)} suggestions for '{threat_title}'")
+            return mappings
+
+        except Exception as exc:
+            logger.error(f"ATT&CK technique mapping failed: {exc}")
+            return None
+
+    # ------------------------------------------------------------------
+    # MITRE ATT&CK – kill chain scenario generation
+    # ------------------------------------------------------------------
+
+    def generate_kill_chain_scenario(
+        self,
+        threat_title: str,
+        threat_description: str,
+        mapped_techniques: List[Dict[str, Any]],
+        assessment_context: Optional[str] = None,
+        threat_actor: Optional[str] = None,
+        include_detection_hints: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Generate a realistic attack kill chain scenario for a threat.
+
+        mapped_techniques: list of dicts with keys mitre_id, technique_name, tactic_shortname
+
+        Returns a dict:
+        {
+          scenario_name, description, threat_actor,
+          stages: [
+            {stage_number, tactic_name, technique_name, mitre_id,
+             description, actor_behavior, detection_hint}
+          ]
+        }
+        """
+        if not self.enabled or not self.client:
+            logger.warning("Bedrock disabled – skipping kill chain generation")
+            return None
+
+        tech_list = "\n".join(
+            f"  - [{t.get('mitre_id', '')}] {t.get('technique_name', '')} ({t.get('tactic_shortname', '')})"
+            for t in mapped_techniques
+        )
+
+        actor_hint = (
+            f"Assume the threat actor is: {threat_actor}."
+            if threat_actor
+            else "Assume a skilled, motivated threat actor."
+        )
+
+        detection_instruction = (
+            "For each stage, include a brief detection_hint describing how a defender could detect the activity."
+            if include_detection_hints
+            else "Set detection_hint to null for all stages."
+        )
+
+        system_prompt = f"""You are an expert threat modeler specializing in MITRE ATT&CK kill chains.
+Generate a realistic, plausible multi-stage attack scenario for the given threat.
+
+{actor_hint}
+
+Return valid JSON only – no markdown, no commentary:
+{{
+  "scenario_name": "Short descriptive title",
+  "description": "1-2 sentence overview of the attack scenario",
+  "threat_actor": "Name or type of attacker",
+  "stages": [
+    {{
+      "stage_number": 1,
+      "tactic_name": "Initial Access",
+      "technique_name": "Spearphishing Link",
+      "mitre_id": "T1566.002",
+      "description": "What happens at this stage",
+      "actor_behavior": "What the attacker does specifically",
+      "detection_hint": "How a defender could detect this"
+    }}
+  ]
+}}
+
+Rules:
+- Include 4-8 stages covering the full attack lifecycle
+- Use ONLY techniques from the provided mapped techniques list (or well-known related techniques)
+- Stages must follow a logical progression: Reconnaissance → Initial Access → ... → Impact
+- actor_behavior must be specific and plausible
+- {detection_instruction}
+- Return ONLY valid JSON"""
+
+        user_prompt = f"""Threat: {threat_title}
+
+Description: {threat_description or 'No description provided'}
+
+{"Assessment context: " + assessment_context if assessment_context else ""}
+
+Mapped ATT&CK techniques:
+{tech_list if tech_list else "  (none pre-mapped – use common techniques for this threat type)"}
+
+Generate the kill chain attack scenario."""
+
+        try:
+            raw = self.invoke_model(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                max_tokens=4000,
+                temperature=0.4,
+            )
+            if not raw:
+                return None
+
+            data = self._extract_json(raw)
+            if not data or "stages" not in data:
+                logger.warning("Kill chain response missing 'stages' key")
+                return None
+
+            logger.info(
+                f"Kill chain generated for '{threat_title}': "
+                f"{len(data.get('stages', []))} stages"
+            )
+            return data
+
+        except Exception as exc:
+            logger.error(f"Kill chain generation failed: {exc}")
+            return None
+
 
 # Global instance
 bedrock_service = BedrockService()

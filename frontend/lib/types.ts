@@ -152,3 +152,102 @@ export interface IntelligenceStatus {
   bedrock_region: string;
   confidence_threshold: number;
 }
+
+// ─────────────────────────────────────────────────────────────────
+// MITRE ATT&CK Types
+// ─────────────────────────────────────────────────────────────────
+
+export interface AttackTactic {
+  id: string;
+  stix_id: string;
+  mitre_id: string;
+  name: string;
+  shortname: string;
+  description?: string;
+  url?: string;
+  technique_count?: number;
+}
+
+export interface AttackTechnique {
+  id: string;
+  stix_id: string;
+  mitre_id: string;
+  name: string;
+  tactic_id?: string;
+  tactic_shortname?: string;
+  description?: string;
+  platforms: string[];
+  data_sources: string[];
+  mitigations: string[];
+  url?: string;
+  is_subtechnique: boolean;
+  is_deprecated: boolean;
+}
+
+export interface AttackTechniqueSummary {
+  id: string;
+  mitre_id: string;
+  name: string;
+  tactic_shortname?: string;
+  is_subtechnique: boolean;
+}
+
+export interface ThreatAttackMapping {
+  id: string;
+  threat_id: string;
+  technique_id: string;
+  technique: AttackTechnique;
+  confidence_score: number;
+  auto_mapped: boolean;
+  mapping_rationale?: string;
+  created_at: string;
+}
+
+export interface AutoMapSuggestion {
+  technique_id?: string;
+  mitre_id: string;
+  technique_name: string;
+  confidence_score: number;
+  mapping_rationale: string;
+  tactic_shortname?: string;
+}
+
+export interface AutoMapResponse {
+  suggestions: AutoMapSuggestion[];
+  saved_count: number;
+  threat_id: string;
+}
+
+export interface KillChainStage {
+  id: string;
+  stage_number: number;
+  tactic_name: string;
+  technique_name?: string;
+  mitre_id?: string;
+  description?: string;
+  actor_behavior?: string;
+  detection_hint?: string;
+}
+
+export interface KillChain {
+  id: string;
+  threat_id: string;
+  tenant_id: string;
+  scenario_name: string;
+  description?: string;
+  threat_actor?: string;
+  generated_by_ai: boolean;
+  model_id?: string;
+  stages: KillChainStage[];
+  created_at: string;
+}
+
+export interface AttackSyncStatus {
+  id?: string;
+  sync_status: 'never' | 'running' | 'completed' | 'failed';
+  last_synced_at?: string;
+  tactics_count: number;
+  techniques_count: number;
+  source_url?: string;
+  error_message?: string;
+}

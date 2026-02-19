@@ -1,0 +1,380 @@
+"""
+MITRE ATT&CK TAXII / STIX Sync Service.
+
+Fetches ATT&CK Enterprise data from MITRE and caches it in the local database.
+
+Strategy:
+  1. Primary  – download ATT&CK STIX bundle from GitHub (single request, no auth).
+  2. Fallback – TAXII 2.1 paginated API at attack-taxii.mitre.org.
+
+The sync is idempotent: running it multiple times is safe.
+"""
+from __future__ import annotations
+
+import json
+import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+import requests
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
+
+from ..core.config import settings
+from ..models.models import AttackTactic, AttackTechnique, AttackSyncStatus
+
+logger = logging.getLogger(__name__)
+
+# ─── constants ────────────────────────────────────────────────────────────────
+TAXII_ACCEPT = "application/taxii+json;version=2.1"
+BUNDLE_TIMEOUT = 60   # seconds – bundle is ~10 MB
+TAXII_TIMEOUT  = 30   # seconds per paginated request
+
+
+class TaxiiSyncService:
+    """Fetches and caches MITRE ATT&CK tactics and techniques."""
+
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
+
+    def sync(self, db: Session) -> Dict[str, Any]:
+        """
+        Full sync: fetch ATT&CK data, upsert into DB, return stats.
+
+        Returns a dict:
+          {status, tactics_count, techniques_count, error_message}
+        """
+        status_record = self._get_or_create_sync_status(db)
+        status_record.sync_status = "running"
+        status_record.error_message = None
+        db.commit()
+
+        try:
+            objects = self._fetch_stix_objects()
+            if not objects:
+                raise RuntimeError("No STIX objects fetched – check network connectivity")
+
+            tactics_map = self._upsert_tactics(db, objects)
+            techniques_count = self._upsert_techniques(db, objects, tactics_map)
+
+            status_record.sync_status = "completed"
+            status_record.last_synced_at = datetime.now(timezone.utc)
+            status_record.tactics_count = len(tactics_map)
+            status_record.techniques_count = techniques_count
+            status_record.source_url = settings.attack_stix_bundle_url
+            db.commit()
+
+            logger.info(
+                f"ATT&CK sync completed: {len(tactics_map)} tactics, "
+                f"{techniques_count} techniques"
+            )
+            return {
+                "status": "completed",
+                "tactics_count": len(tactics_map),
+                "techniques_count": techniques_count,
+            }
+
+        except Exception as exc:
+            logger.error(f"ATT&CK sync failed: {exc}", exc_info=True)
+            try:
+                status_record.sync_status = "failed"
+                status_record.error_message = str(exc)[:500]
+                db.commit()
+            except Exception:
+                db.rollback()
+            return {
+                "status": "failed",
+                "tactics_count": 0,
+                "techniques_count": 0,
+                "error_message": str(exc),
+            }
+
+    # ------------------------------------------------------------------
+    # Fetch helpers
+    # ------------------------------------------------------------------
+
+    def _fetch_stix_objects(self) -> List[Dict[str, Any]]:
+        """Try GitHub bundle first; fall back to TAXII 2.1 paginated API."""
+        logger.info("Fetching ATT&CK STIX bundle from GitHub…")
+        try:
+            return self._fetch_via_bundle()
+        except Exception as bundle_err:
+            logger.warning(f"GitHub bundle failed ({bundle_err}); trying TAXII 2.1…")
+            return self._fetch_via_taxii()
+
+    def _fetch_via_bundle(self) -> List[Dict[str, Any]]:
+        """Download the monolithic STIX bundle JSON from GitHub."""
+        resp = requests.get(
+            settings.attack_stix_bundle_url,
+            timeout=BUNDLE_TIMEOUT,
+            headers={"User-Agent": "ThreatRiskAssessmentPlatform/1.0"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        objects: List[Dict] = data.get("objects", [])
+        logger.info(f"Bundle fetched: {len(objects)} raw STIX objects")
+        return objects
+
+    def _fetch_via_taxii(self) -> List[Dict[str, Any]]:
+        """
+        Fetch objects from MITRE TAXII 2.1 API with cursor-based pagination.
+        Filters to only x-mitre-tactic and attack-pattern types.
+        """
+        headers = {
+            "Accept": TAXII_ACCEPT,
+            "User-Agent": "ThreatRiskAssessmentPlatform/1.0",
+        }
+        base_url = settings.attack_taxii_url
+        params: Dict[str, Any] = {
+            "match[type]": ["attack-pattern", "x-mitre-tactic"],
+        }
+
+        all_objects: List[Dict] = []
+        next_cursor: Optional[str] = None
+        page = 0
+
+        while True:
+            page += 1
+            if next_cursor:
+                params["next"] = next_cursor
+            else:
+                params.pop("next", None)
+
+            resp = requests.get(base_url, headers=headers, params=params, timeout=TAXII_TIMEOUT)
+            resp.raise_for_status()
+
+            body = resp.json()
+            page_objects = body.get("objects", [])
+            all_objects.extend(page_objects)
+            logger.info(f"TAXII page {page}: {len(page_objects)} objects (total {len(all_objects)})")
+
+            next_cursor = body.get("next")
+            if not next_cursor or not page_objects:
+                break
+
+        logger.info(f"TAXII fetch complete: {len(all_objects)} objects across {page} pages")
+        return all_objects
+
+    # ------------------------------------------------------------------
+    # Upsert helpers
+    # ------------------------------------------------------------------
+
+    def _upsert_tactics(
+        self,
+        db: Session,
+        objects: List[Dict[str, Any]],
+    ) -> Dict[str, AttackTactic]:
+        """
+        Parse x-mitre-tactic objects, upsert into DB.
+        Returns a dict keyed by shortname → AttackTactic ORM instance.
+        """
+        tactics_map: Dict[str, AttackTactic] = {}
+        now = datetime.now(timezone.utc)
+
+        for obj in objects:
+            if obj.get("type") != "x-mitre-tactic":
+                continue
+            if obj.get("x_mitre_deprecated") or obj.get("revoked"):
+                continue
+
+            stix_id = obj.get("id", "")
+            name = obj.get("name", "")
+            shortname = obj.get("x_mitre_shortname", "")
+            description = obj.get("description", "")
+
+            # Extract external MITRE reference
+            mitre_id, url = self._extract_mitre_ref(obj)
+            if not mitre_id:
+                continue
+
+            existing = db.query(AttackTactic).filter(
+                AttackTactic.stix_id == stix_id
+            ).first()
+
+            if existing:
+                existing.name = name
+                existing.shortname = shortname
+                existing.description = description
+                existing.url = url
+                existing.last_synced_at = now
+                tactics_map[shortname] = existing
+            else:
+                tactic = AttackTactic(
+                    stix_id=stix_id,
+                    mitre_id=mitre_id,
+                    name=name,
+                    shortname=shortname,
+                    description=description,
+                    url=url,
+                    last_synced_at=now,
+                )
+                db.add(tactic)
+                db.flush()  # get the generated id
+                tactics_map[shortname] = tactic
+
+        try:
+            db.commit()
+        except SQLAlchemyError as exc:
+            db.rollback()
+            raise exc
+
+        logger.info(f"Upserted {len(tactics_map)} tactics")
+        return tactics_map
+
+    def _upsert_techniques(
+        self,
+        db: Session,
+        objects: List[Dict[str, Any]],
+        tactics_map: Dict[str, AttackTactic],
+    ) -> int:
+        """
+        Parse attack-pattern objects, upsert into DB.
+        Returns total number of techniques upserted.
+        """
+        now = datetime.now(timezone.utc)
+        count = 0
+
+        # Build a stix_id → technique map (to resolve parent sub-techniques)
+        existing_by_stix: Dict[str, AttackTechnique] = {
+            t.stix_id: t
+            for t in db.query(AttackTechnique).all()
+        }
+
+        # First pass: non-subtechniques (so parent IDs can be resolved in pass 2)
+        all_patterns = [
+            obj for obj in objects
+            if obj.get("type") == "attack-pattern"
+            and not obj.get("x_mitre_deprecated")
+            and not obj.get("revoked")
+        ]
+
+        # Sort: parent techniques first
+        parents = [o for o in all_patterns if not o.get("x_mitre_is_subtechnique")]
+        subs    = [o for o in all_patterns if o.get("x_mitre_is_subtechnique")]
+
+        for obj in parents + subs:
+            technique = self._upsert_single_technique(
+                db, obj, tactics_map, existing_by_stix, now
+            )
+            if technique:
+                existing_by_stix[technique.stix_id] = technique
+                count += 1
+
+        try:
+            db.commit()
+        except SQLAlchemyError as exc:
+            db.rollback()
+            raise exc
+
+        logger.info(f"Upserted {count} techniques/sub-techniques")
+        return count
+
+    def _upsert_single_technique(
+        self,
+        db: Session,
+        obj: Dict[str, Any],
+        tactics_map: Dict[str, AttackTactic],
+        existing_by_stix: Dict[str, AttackTechnique],
+        now: datetime,
+    ) -> Optional[AttackTechnique]:
+        """Upsert a single attack-pattern STIX object."""
+        stix_id = obj.get("id", "")
+        name = obj.get("name", "")
+        description = obj.get("description", "")
+        platforms: List[str] = obj.get("x_mitre_platforms", []) or []
+        is_subtechnique: bool = bool(obj.get("x_mitre_is_subtechnique", False))
+
+        # Data sources may be strings or structured objects in different ATT&CK versions
+        raw_sources = obj.get("x_mitre_data_sources", []) or []
+        data_sources: List[str] = []
+        for src in raw_sources:
+            if isinstance(src, str):
+                data_sources.append(src)
+            elif isinstance(src, dict):
+                data_sources.append(src.get("name", str(src)))
+
+        # Resolve MITRE ID and URL
+        mitre_id, url = self._extract_mitre_ref(obj)
+        if not mitre_id:
+            return None
+
+        # Resolve primary tactic via kill_chain_phases
+        tactic_obj: Optional[AttackTactic] = None
+        tactic_shortname: Optional[str] = None
+        phases: List[Dict] = obj.get("kill_chain_phases", []) or []
+        for phase in phases:
+            if phase.get("kill_chain_name") == "mitre-attack":
+                sn = phase.get("phase_name", "")
+                if sn in tactics_map:
+                    tactic_obj = tactics_map[sn]
+                    tactic_shortname = sn
+                    break
+
+        existing = existing_by_stix.get(stix_id)
+
+        if existing:
+            existing.name = name
+            existing.description = description
+            existing.platforms = platforms
+            existing.data_sources = data_sources
+            existing.url = url
+            existing.is_subtechnique = is_subtechnique
+            existing.tactic_id = tactic_obj.id if tactic_obj else None
+            existing.tactic_shortname = tactic_shortname
+            existing.last_synced_at = now
+            return existing
+        else:
+            technique = AttackTechnique(
+                stix_id=stix_id,
+                mitre_id=mitre_id,
+                name=name,
+                tactic_id=tactic_obj.id if tactic_obj else None,
+                tactic_shortname=tactic_shortname,
+                description=description,
+                platforms=platforms,
+                data_sources=data_sources,
+                mitigations=[],
+                url=url,
+                is_subtechnique=is_subtechnique,
+                last_synced_at=now,
+            )
+            db.add(technique)
+            db.flush()
+            return technique
+
+    # ------------------------------------------------------------------
+    # Utility helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_mitre_ref(obj: Dict[str, Any]) -> tuple[str, str]:
+        """Extract (mitre_id, url) from STIX external_references."""
+        for ref in obj.get("external_references", []):
+            if ref.get("source_name") == "mitre-attack":
+                return ref.get("external_id", ""), ref.get("url", "")
+        return "", ""
+
+    @staticmethod
+    def _get_or_create_sync_status(db: Session) -> AttackSyncStatus:
+        record = db.query(AttackSyncStatus).first()
+        if not record:
+            record = AttackSyncStatus(sync_status="never")
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+        return record
+
+    def needs_refresh(self, db: Session) -> bool:
+        """Return True if the cache is stale or has never been populated."""
+        record = db.query(AttackSyncStatus).first()
+        if not record or not record.last_synced_at:
+            return True
+        if record.sync_status != "completed":
+            return True
+        age_days = (datetime.now(timezone.utc) - record.last_synced_at).days
+        return age_days >= settings.attack_cache_ttl_days
+
+
+# Module-level singleton
+taxii_sync_service = TaxiiSyncService()
