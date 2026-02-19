@@ -296,8 +296,9 @@ class AttackTechnique(Base):
     tactic = relationship("AttackTactic", back_populates="techniques")
     threat_mappings = relationship("ThreatAttackMapping", back_populates="technique")
     subtechniques = relationship("AttackTechnique",
-                                  foreign_keys=[parent_technique_id],
-                                  backref="parent_technique")
+                                  primaryjoin="AttackTechnique.parent_technique_id == AttackTechnique.id",
+                                  foreign_keys="[AttackTechnique.parent_technique_id]",
+                                  lazy="select")
 
 
 class ThreatAttackMapping(Base):
