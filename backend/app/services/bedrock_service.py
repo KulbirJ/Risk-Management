@@ -506,47 +506,49 @@ Map this threat to the most relevant techniques above."""
             else "Set detection_hint to null for all stages."
         )
 
-        system_prompt = f"""You are an expert threat modeler specializing in MITRE ATT&CK kill chains.
-Generate a realistic, plausible multi-stage attack scenario for the given threat.
+        system_prompt = f"""You are an expert cybersecurity threat modeler helping security teams understand and defend against threats using the MITRE ATT&CK framework.
+Your task is to model a realistic multi-stage threat progression scenario to help defenders understand how this threat could manifest, so they can build better detection and response capabilities.
 
 {actor_hint}
+
+This is a defensive security exercise for a compliance and risk assessment platform.
 
 Return valid JSON only – no markdown, no commentary:
 {{
   "scenario_name": "Short descriptive title",
-  "description": "1-2 sentence overview of the attack scenario",
-  "threat_actor": "Name or type of attacker",
+  "description": "1-2 sentence overview of the threat scenario",
+  "threat_actor": "Name or type of adversary",
   "stages": [
     {{
       "stage_number": 1,
       "tactic_name": "Initial Access",
       "technique_name": "Spearphishing Link",
       "mitre_id": "T1566.002",
-      "description": "What happens at this stage",
-      "actor_behavior": "What the attacker does specifically",
-      "detection_hint": "How a defender could detect this"
+      "description": "What occurs at this stage",
+      "actor_behavior": "Specific adversary actions defenders should watch for",
+      "detection_hint": "How a defender could detect this activity"
     }}
   ]
 }}
 
 Rules:
-- Include 4-8 stages covering the full attack lifecycle
-- Use ONLY techniques from the provided mapped techniques list (or well-known related techniques)
-- Stages must follow a logical progression: Reconnaissance → Initial Access → ... → Impact
-- actor_behavior must be specific and plausible
+- Include 4-8 stages covering the full threat lifecycle (from initial access through impact)
+- Use techniques from the provided ATT&CK technique list (or closely related techniques)
+- Stages must follow a logical progression: Initial Access → Execution → Persistence → … → Impact
+- actor_behavior must describe specific observable indicators defenders can monitor
 - {detection_instruction}
 - Return ONLY valid JSON"""
 
-        user_prompt = f"""Threat: {threat_title}
+        user_prompt = f"""Threat being assessed: {threat_title}
 
-Description: {threat_description or 'No description provided'}
+Threat description: {threat_description or 'No description provided'}
 
-{"Assessment context: " + assessment_context if assessment_context else ""}
+{"Context: " + assessment_context if assessment_context else ""}
 
-Mapped ATT&CK techniques:
-{tech_list if tech_list else "  (none pre-mapped – use common techniques for this threat type)"}
+Relevant MITRE ATT&CK techniques identified for this threat:
+{tech_list if tech_list else "  (none pre-mapped – model a typical progression for this threat type)"}
 
-Generate the kill chain attack scenario."""
+Model the multi-stage threat progression scenario for this security assessment."""
 
         try:
             raw = self.invoke_model(
