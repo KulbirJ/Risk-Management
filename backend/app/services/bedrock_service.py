@@ -375,16 +375,11 @@ Available ATT&CK techniques:
 Map this threat to the most relevant techniques above."""
 
         try:
-            raw = self.invoke_model(
+            data = self.generate_structured_output(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 max_tokens=2000,
-                temperature=0.2,
             )
-            if not raw:
-                return None
-
-            data = self._extract_json(raw)
             if not data:
                 return None
 
@@ -487,16 +482,11 @@ Mapped ATT&CK techniques:
 Generate the kill chain attack scenario."""
 
         try:
-            raw = self.invoke_model(
+            data = self.generate_structured_output(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 max_tokens=4000,
-                temperature=0.4,
             )
-            if not raw:
-                return None
-
-            data = self._extract_json(raw)
             if not data or "stages" not in data:
                 logger.warning("Kill chain response missing 'stages' key")
                 return None
