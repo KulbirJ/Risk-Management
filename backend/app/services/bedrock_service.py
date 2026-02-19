@@ -311,6 +311,68 @@ class BedrockService:
         required_keys = schema.get('required', [])
         return all(key in data for key in required_keys)
 
+    def _extract_json_object(self, text: str) -> Optional[Dict[str, Any]]:
+        """
+        Robustly extract the first JSON object from a Bedrock response.
+
+        Handles:
+        - Plain JSON responses
+        - Markdown fenced blocks (```json ... ``` or ``` ... ```)
+        - Preamble/postamble text around the JSON block
+        """
+        import re
+        if not text:
+            return None
+
+        # 1. Try stripping fenced code blocks first (anywhere in the string)
+        fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
+        if fence_match:
+            candidate = fence_match.group(1).strip()
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                pass
+
+        # 2. Try to find a bare JSON object by locating the first '{' and
+        #    matching its closing '}' via a brace counter
+        start = text.find('{')
+        if start == -1:
+            return None
+
+        depth = 0
+        end = -1
+        in_string = False
+        escape_next = False
+        for i, ch in enumerate(text[start:], start=start):
+            if escape_next:
+                escape_next = False
+                continue
+            if ch == '\\' and in_string:
+                escape_next = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+
+        if end == -1:
+            logger.error("Could not find closing brace in Bedrock response")
+            return None
+
+        try:
+            return json.loads(text[start:end])
+        except json.JSONDecodeError as exc:
+            logger.error(f"JSON parse failed after brace matching: {exc}")
+            return None
+
     # ------------------------------------------------------------------
     # MITRE ATT&CK – technique mapping
     # ------------------------------------------------------------------
@@ -375,11 +437,16 @@ Available ATT&CK techniques:
 Map this threat to the most relevant techniques above."""
 
         try:
-            data = self.generate_structured_output(
+            raw = self.invoke_model(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 max_tokens=2000,
+                temperature=0.2,
             )
+            if not raw:
+                return None
+
+            data = self._extract_json_object(raw)
             if not data:
                 return None
 
@@ -482,13 +549,18 @@ Mapped ATT&CK techniques:
 Generate the kill chain attack scenario."""
 
         try:
-            data = self.generate_structured_output(
+            raw = self.invoke_model(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 max_tokens=4000,
+                temperature=0.4,
             )
+            if not raw:
+                return None
+
+            data = self._extract_json_object(raw)
             if not data or "stages" not in data:
-                logger.warning("Kill chain response missing 'stages' key")
+                logger.warning(f"Kill chain response missing 'stages' key. Raw (first 300): {(raw or '')[:300]}")
                 return None
 
             logger.info(
