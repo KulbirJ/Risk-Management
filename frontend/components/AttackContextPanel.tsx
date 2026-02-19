@@ -193,7 +193,9 @@ export function AttackContextPanel({ threatId, threatTitle }: AttackContextPanel
                     </span>
                     <ConfidenceBadge score={mapping.confidence_score} />
                     {mapping.auto_mapped && (
-                      <Bot className="w-3 h-3 text-indigo-400" title="AI suggested" />
+                      <span title="AI suggested">
+                        <Bot className="w-3 h-3 text-indigo-400" />
+                      </span>
                     )}
                   </div>
                 ))}
