@@ -10,7 +10,7 @@ import logging
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, case
 from sqlalchemy.orm import Session
 
 from ..models.models import AttackTactic, AttackTechnique, AttackSyncStatus, ThreatAttackMapping
@@ -96,8 +96,25 @@ class AttackDataService:
         """
         Case-insensitive keyword search across technique name, description,
         mitre_id, and tactic_shortname.
+
+        Ranking (lowest number = first):
+          0 – exact mitre_id match  (e.g. "T1566" → T1566)
+          1 – mitre_id prefix match (e.g. "T1566" → T1566.001)
+          2 – name match
+          3 – description / other field match
         """
-        pattern = f"%{query.lower()}%"
+        q = query.lower().strip()
+        pattern = f"%{q}%"
+        prefix_pattern = f"{q}%"
+
+        # Priority bucket via CASE expression
+        rank = case(
+            (func.lower(AttackTechnique.mitre_id) == q, 0),
+            (func.lower(AttackTechnique.mitre_id).like(prefix_pattern), 1),
+            (func.lower(AttackTechnique.name).like(pattern), 2),
+            else_=3,
+        )
+
         return (
             db.query(AttackTechnique)
             .filter(
@@ -109,7 +126,7 @@ class AttackDataService:
                     func.lower(AttackTechnique.tactic_shortname).like(pattern),
                 ),
             )
-            .order_by(AttackTechnique.mitre_id)
+            .order_by(rank, AttackTechnique.mitre_id)
             .limit(limit)
             .all()
         )
