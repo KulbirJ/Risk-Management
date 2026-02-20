@@ -165,6 +165,7 @@ export interface AttackTactic {
   shortname: string;
   description?: string;
   url?: string;
+  phase_order?: number;
   technique_count?: number;
 }
 
@@ -176,6 +177,7 @@ export interface AttackTechnique {
   tactic_id?: string;
   tactic_shortname?: string;
   description?: string;
+  detection_text?: string;
   platforms: string[];
   data_sources: string[];
   mitigations: string[];
