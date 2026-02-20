@@ -11,7 +11,8 @@
  *   - Built-in zoom/pan via React Flow Controls
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ReactFlow,
   Background,
@@ -31,6 +32,8 @@ import {
   Loader2,
   X,
   FileText,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import type { KillChain, KillChainStage } from '../lib/types';
 
@@ -211,6 +214,130 @@ function StageDrawer({ stage, onClose }: { stage: KillChainStage; onClose: () =>
   );
 }
 
+// ── Fullscreen overlay ──────────────────────────────────────────────────────
+
+interface FullscreenFlowProps {
+  killChain: KillChain;
+  onClose: () => void;
+}
+
+function FullscreenFlow({ killChain, onClose }: FullscreenFlowProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const selectedStage = selectedId
+    ? killChain.stages.find((s) => s.id === selectedId) ?? null
+    : null;
+
+  const nodes: Node[] = useMemo(
+    () =>
+      killChain.stages.map((stage, idx) => ({
+        id: stage.id,
+        type: 'stageNode',
+        position: { x: idx * (NODE_W + H_GAP), y: 60 },
+        selectable: true,
+        selected: stage.id === selectedId,
+        data: { stage } as unknown as Record<string, unknown>,
+      })),
+    [killChain.stages, selectedId],
+  );
+
+  const edges: Edge[] = useMemo(
+    () =>
+      killChain.stages.slice(0, -1).map((stage, idx) => ({
+        id: `e-fs-${idx}`,
+        source: stage.id,
+        target: killChain.stages[idx + 1].id,
+        type: 'smoothstep',
+        style: { stroke: '#4b5563', strokeWidth: 2 },
+      })),
+    [killChain.stages],
+  );
+
+  // Close on Escape
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Prevent body scroll while fullscreen is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  if (typeof window === 'undefined') return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex flex-col bg-gray-950"
+      style={{ fontFamily: 'inherit' }}
+    >
+      {/* Fullscreen header */}
+      <div className="flex items-start justify-between px-5 py-3 border-b border-gray-800 flex-shrink-0 bg-gray-900">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Target className="w-4 h-4 text-red-400 flex-shrink-0" />
+            <h3 className="text-sm font-bold text-white">{killChain.scenario_name}</h3>
+            {killChain.threat_actor && (
+              <span className="text-xs bg-red-900/40 border border-red-800 text-red-300 px-2 py-0.5 rounded-full">
+                {killChain.threat_actor}
+              </span>
+            )}
+            <span className="text-xs bg-gray-800 border border-gray-600 text-gray-400 px-2 py-0.5 rounded-full">
+              {killChain.stages.length} stage{killChain.stages.length !== 1 ? 's' : ''} · ATT&amp;CK validated
+            </span>
+          </div>
+          {killChain.description && (
+            <p className="text-xs text-gray-400 mt-1 leading-snug">{killChain.description}</p>
+          )}
+          <p className="text-[11px] text-gray-600 mt-0.5">
+            {selectedStage ? 'Click another stage or click selected to close' : 'Click a stage to inspect · Press Esc to close fullscreen'}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="ml-4 flex-shrink-0 inline-flex items-center gap-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1.5 rounded-lg transition-colors"
+          title="Exit fullscreen (Esc)"
+        >
+          <Minimize2 className="w-3.5 h-3.5" />
+          Exit Fullscreen
+        </button>
+      </div>
+
+      {/* Full canvas */}
+      <div className="relative flex-1 min-h-0">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.15 }}
+          minZoom={0.2}
+          maxZoom={2}
+          proOptions={{ hideAttribution: true }}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          onNodeClick={(_evt, node) =>
+            setSelectedId((prev) => (prev === node.id ? null : node.id))
+          }
+          onPaneClick={() => setSelectedId(null)}
+        >
+          <Background color="#374151" gap={24} size={1} />
+          <Controls showInteractive={false} style={{ bottom: 16, left: 16 }} />
+        </ReactFlow>
+
+        {selectedStage && (
+          <StageDrawer stage={selectedStage} onClose={() => setSelectedId(null)} />
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 interface KillChainFlowProps {
@@ -224,6 +351,9 @@ const CANVAS_H = 220;
 export function KillChainFlow({ killChain, onDelete }: KillChainFlowProps) {
   const [deleting, setDeleting] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const openFullscreen = useCallback(() => setFullscreen(true), []);
+  const closeFullscreen = useCallback(() => setFullscreen(false), []);
 
   const selectedStage = selectedId
     ? killChain.stages.find((s) => s.id === selectedId) ?? null
@@ -290,17 +420,31 @@ export function KillChainFlow({ killChain, onDelete }: KillChainFlowProps) {
             {selectedStage ? 'Click another stage or click selected to close' : 'Click a stage to inspect'}
           </p>
         </div>
-        {onDelete && (
+        <div className="flex items-center gap-2 ml-3 flex-shrink-0">
           <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="ml-3 flex-shrink-0 text-gray-600 hover:text-red-400 disabled:opacity-40 transition-colors"
-            title="Delete scenario"
+            onClick={openFullscreen}
+            className="text-gray-500 hover:text-white transition-colors"
+            title="Expand to full screen"
           >
-            {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            <Maximize2 className="w-4 h-4" />
           </button>
-        )}
+          {onDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-gray-600 hover:text-red-400 disabled:opacity-40 transition-colors"
+              title="Delete scenario"
+            >
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Fullscreen overlay (portal) */}
+      {fullscreen && (
+        <FullscreenFlow killChain={killChain} onClose={closeFullscreen} />
+      )}
 
       {/* React Flow canvas with detail drawer overlay */}
       <div className="relative" style={{ height: CANVAS_H }}>
