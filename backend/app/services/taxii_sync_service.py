@@ -21,7 +21,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..core.config import settings
-from ..models.models import AttackTactic, AttackTechnique, AttackSyncStatus
+from ..models.models import (
+    AttackTactic, AttackTechnique, AttackSyncStatus,
+    ATTACK_TACTIC_ORDER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +200,7 @@ class TaxiiSyncService:
                 existing.shortname = shortname
                 existing.description = description
                 existing.url = url
+                existing.phase_order = ATTACK_TACTIC_ORDER.get(shortname)
                 existing.last_synced_at = now
                 tactics_map[shortname] = existing
             else:
@@ -207,6 +211,7 @@ class TaxiiSyncService:
                     shortname=shortname,
                     description=description,
                     url=url,
+                    phase_order=ATTACK_TACTIC_ORDER.get(shortname),
                     last_synced_at=now,
                 )
                 db.add(tactic)
@@ -282,6 +287,7 @@ class TaxiiSyncService:
         stix_id = obj.get("id", "")
         name = obj.get("name", "")
         description = obj.get("description", "")
+        detection_text = obj.get("x_mitre_detection", None)
         platforms: List[str] = obj.get("x_mitre_platforms", []) or []
         is_subtechnique: bool = bool(obj.get("x_mitre_is_subtechnique", False))
 
@@ -316,6 +322,7 @@ class TaxiiSyncService:
         if existing:
             existing.name = name
             existing.description = description
+            existing.detection_text = detection_text
             existing.platforms = platforms
             existing.data_sources = data_sources
             existing.url = url
@@ -332,6 +339,7 @@ class TaxiiSyncService:
                 tactic_id=tactic_obj.id if tactic_obj else None,
                 tactic_shortname=tactic_shortname,
                 description=description,
+                detection_text=detection_text,
                 platforms=platforms,
                 data_sources=data_sources,
                 mitigations=[],

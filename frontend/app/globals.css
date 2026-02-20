@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* React Flow canvas styles */
+@import '@xyflow/react/dist/style.css';
+
 :root {
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;

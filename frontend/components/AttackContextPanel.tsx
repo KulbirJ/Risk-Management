@@ -217,12 +217,12 @@ export function AttackContextPanel({ threatId, threatTitle }: AttackContextPanel
                 {generating ? (
                   <>
                     <Loader2 className="w-3 h-3 animate-spin" />
-                    Generating...
+                    Building...
                   </>
                 ) : (
                   <>
                     <Zap className="w-3 h-3" />
-                    Generate Kill Chain
+                    Build Threat Progression
                   </>
                 )}
               </button>
@@ -235,7 +235,8 @@ export function AttackContextPanel({ threatId, threatTitle }: AttackContextPanel
               </div>
             ) : killChains.length === 0 ? (
               <p className="text-xs text-gray-400 italic py-1">
-                No attack scenarios generated yet. Click "Generate Kill Chain" to create an AI-powered scenario.
+                No threat progressions built yet. Map ATT&amp;CK techniques first, then click
+                &ldquo;Build Threat Progression&rdquo; to generate a validated ATT&amp;CK kill chain.
               </p>
             ) : (
               <div className="space-y-3">

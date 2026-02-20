@@ -441,6 +441,7 @@ class KillChainRead(BaseModel):
     threat_actor: Optional[str] = None
     generated_by_ai: bool
     model_id: Optional[str] = None
+    status: str = "complete"  # building | complete | failed
     stages: List[KillChainStageRead] = []
     created_at: datetime
 

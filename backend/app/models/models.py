@@ -253,6 +253,25 @@ class IntelligenceJob(Base):
 # MITRE ATT&CK Integration Models
 # ─────────────────────────────────────────────────────────────────
 
+# Canonical ATT&CK tactic ordering (Enterprise, follows kill chain phase flow)
+ATTACK_TACTIC_ORDER: dict[str, int] = {
+    "reconnaissance":       1,
+    "resource-development": 2,
+    "initial-access":       3,
+    "execution":            4,
+    "persistence":          5,
+    "privilege-escalation": 6,
+    "defense-evasion":      7,
+    "credential-access":    8,
+    "discovery":            9,
+    "lateral-movement":     10,
+    "collection":           11,
+    "command-and-control":  12,
+    "exfiltration":         13,
+    "impact":               14,
+}
+
+
 class AttackTactic(Base):
     """MITRE ATT&CK Tactic (e.g., Initial Access, Execution, Persistence)."""
     __tablename__ = "attack_tactics"
@@ -264,6 +283,7 @@ class AttackTactic(Base):
     shortname = Column(String(100), nullable=False, index=True)      # e.g. "initial-access"
     description = Column(Text, nullable=True)
     url = Column(String(512), nullable=True)
+    phase_order = Column(Integer, nullable=True, index=True)         # 1-14 canonical kill chain order
     last_synced_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
@@ -288,6 +308,7 @@ class AttackTechnique(Base):
     url = Column(String(512), nullable=True)
     is_subtechnique = Column(Boolean, default=False)
     parent_technique_id = Column(UUID(as_uuid=True), ForeignKey("attack_techniques.id"), nullable=True)
+    detection_text = Column(Text, nullable=True)                     # x_mitre_detection from STIX
     is_deprecated = Column(Boolean, default=False)
     last_synced_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
@@ -333,6 +354,9 @@ class KillChain(Base):
     threat_actor = Column(String(255), nullable=True)    # e.g. "APT29", "Ransomware group"
     generated_by_ai = Column(Boolean, default=True)
     model_id = Column(String(255), nullable=True)
+    # Status for async generation: building | complete | failed
+    status = Column(String(50), default="complete", nullable=False)
+    error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
     # Relationships

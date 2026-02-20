@@ -292,6 +292,19 @@ def generate_kill_chain(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.get("/kill-chains/{kill_chain_id}", response_model=KillChainRead)
+def get_kill_chain(
+    kill_chain_id: UUID,
+    db: Session = Depends(get_db),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context),
+):
+    """Retrieve a single kill chain scenario by ID."""
+    kc = kill_chain_service.get_kill_chain(db, kill_chain_id)
+    if not kc:
+        raise HTTPException(status_code=404, detail="Kill chain not found")
+    return kc
+
+
 @router.delete("/kill-chains/{kill_chain_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_kill_chain(
     kill_chain_id: UUID,

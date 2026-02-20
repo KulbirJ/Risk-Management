@@ -238,6 +238,7 @@ export interface KillChain {
   threat_actor?: string;
   generated_by_ai: boolean;
   model_id?: string;
+  status: 'building' | 'complete' | 'failed';
   stages: KillChainStage[];
   created_at: string;
 }

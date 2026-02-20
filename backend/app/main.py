@@ -258,6 +258,7 @@ def create_app() -> FastAPI:
                 ("attack_tactics", "shortname", "VARCHAR(100)"),
                 ("attack_tactics", "description", "TEXT"),
                 ("attack_tactics", "url", "VARCHAR(512)"),
+                ("attack_tactics", "phase_order", "INTEGER"),
                 ("attack_tactics", "last_synced_at", "TIMESTAMP WITH TIME ZONE"),
                 ("attack_tactics", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 
@@ -267,6 +268,7 @@ def create_app() -> FastAPI:
                 ("attack_techniques", "name", "VARCHAR(255)"),
                 ("attack_techniques", "tactic_shortname", "VARCHAR(100)"),
                 ("attack_techniques", "description", "TEXT"),
+                ("attack_techniques", "detection_text", "TEXT"),
                 ("attack_techniques", "platforms", "JSONB DEFAULT '[]'"),
                 ("attack_techniques", "data_sources", "JSONB DEFAULT '[]'"),
                 ("attack_techniques", "mitigations", "JSONB DEFAULT '[]'"),
@@ -288,6 +290,8 @@ def create_app() -> FastAPI:
                 ("kill_chains", "threat_actor", "VARCHAR(255)"),
                 ("kill_chains", "generated_by_ai", "BOOLEAN DEFAULT TRUE"),
                 ("kill_chains", "model_id", "VARCHAR(255)"),
+                ("kill_chains", "status", "VARCHAR(50) DEFAULT 'complete'"),
+                ("kill_chains", "error_message", "TEXT"),
                 ("kill_chains", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 
                 # ============ KILL_CHAIN_STAGES TABLE ============

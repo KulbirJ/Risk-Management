@@ -1,156 +1,262 @@
 'use client';
 
 /**
- * KillChainFlow – renders a MITRE ATT&CK kill chain as a visual horizontal flow.
+ * KillChainFlow – interactive React Flow canvas for ATT&CK kill chain stages.
  *
- * Each stage card shows: tactic, technique, MITRE ID, actor behaviour,
- * detection hint and a brief description.  Stages are connected with arrows.
+ * Architecture:
+ *   - Each stage is a custom node (StageNode) showing tactic + technique + MITRE ID
+ *   - Nodes are laid out left-to-right (linear kill chain progression)
+ *   - Edge connects each consecutive stage
+ *   - Clicking a node opens a detail drawer (description, adversary behavior, detection)
+ *   - Built-in zoom/pan via React Flow Controls
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
-  ChevronRight,
-  Eye,
-  Zap,
-  Target,
-  AlertTriangle,
-  Shield,
-  ChevronDown,
-  ChevronUp,
+  ReactFlow,
+  Background,
+  Controls,
+  Handle,
+  Position,
+  type Node,
+  type Edge,
+  type NodeProps,
+} from '@xyflow/react';
+import {
   ExternalLink,
+  Zap,
+  Eye,
+  Target,
   Trash2,
   Loader2,
+  X,
+  FileText,
 } from 'lucide-react';
 import type { KillChain, KillChainStage } from '../lib/types';
 
-// Tactic colour mapping (ATT&CK standard palette adapted for dark theme)
-const TACTIC_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-  'reconnaissance':       { bg: 'bg-slate-800',   border: 'border-slate-600',  text: 'text-slate-200' },
-  'resource-development': { bg: 'bg-zinc-800',    border: 'border-zinc-600',   text: 'text-zinc-200' },
-  'initial-access':       { bg: 'bg-red-900/50',  border: 'border-red-700',    text: 'text-red-200' },
-  'execution':            { bg: 'bg-orange-900/50', border: 'border-orange-700', text: 'text-orange-200' },
-  'persistence':          { bg: 'bg-amber-900/50', border: 'border-amber-700', text: 'text-amber-200' },
-  'privilege-escalation': { bg: 'bg-yellow-900/50', border: 'border-yellow-700', text: 'text-yellow-200' },
-  'defense-evasion':      { bg: 'bg-lime-900/50', border: 'border-lime-700',   text: 'text-lime-200' },
-  'credential-access':    { bg: 'bg-green-900/50', border: 'border-green-700', text: 'text-green-200' },
-  'discovery':            { bg: 'bg-teal-900/50', border: 'border-teal-700',   text: 'text-teal-200' },
-  'lateral-movement':     { bg: 'bg-cyan-900/50', border: 'border-cyan-700',   text: 'text-cyan-200' },
-  'collection':           { bg: 'bg-sky-900/50',  border: 'border-sky-700',    text: 'text-sky-200' },
-  'command-and-control':  { bg: 'bg-blue-900/50', border: 'border-blue-700',   text: 'text-blue-200' },
-  'exfiltration':         { bg: 'bg-violet-900/50', border: 'border-violet-700', text: 'text-violet-200' },
-  'impact':               { bg: 'bg-purple-900/50', border: 'border-purple-700', text: 'text-purple-200' },
+// ── Tactic colour palette (ATT&CK standard, dark theme) ────────────────────
+
+interface TacticColors {
+  bg: string;
+  border: string;
+  text: string;
+  headerBg: string;
+  borderHex: string;
+}
+
+const TACTIC_COLORS: Record<string, TacticColors> = {
+  'reconnaissance':       { bg: '#0f172a', border: '#475569', text: '#cbd5e1', headerBg: '#1e293b', borderHex: '#475569' },
+  'resource-development': { bg: '#111827', border: '#52525b', text: '#d4d4d8', headerBg: '#27272a', borderHex: '#52525b' },
+  'initial-access':       { bg: '#1c0a0a', border: '#dc2626', text: '#fca5a5', headerBg: '#450a0a', borderHex: '#dc2626' },
+  'execution':            { bg: '#1a0d05', border: '#ea580c', text: '#fdba74', headerBg: '#431407', borderHex: '#ea580c' },
+  'persistence':          { bg: '#1a0f00', border: '#d97706', text: '#fcd34d', headerBg: '#451a03', borderHex: '#d97706' },
+  'privilege-escalation': { bg: '#1a1100', border: '#ca8a04', text: '#fde047', headerBg: '#422006', borderHex: '#ca8a04' },
+  'defense-evasion':      { bg: '#0d1a00', border: '#65a30d', text: '#bef264', headerBg: '#1a2e05', borderHex: '#65a30d' },
+  'credential-access':    { bg: '#001a0d', border: '#16a34a', text: '#86efac', headerBg: '#052e16', borderHex: '#16a34a' },
+  'discovery':            { bg: '#00191a', border: '#0d9488', text: '#5eead4', headerBg: '#042f2e', borderHex: '#0d9488' },
+  'lateral-movement':     { bg: '#001a22', border: '#0891b2', text: '#67e8f9', headerBg: '#083344', borderHex: '#0891b2' },
+  'collection':           { bg: '#001828', border: '#0284c7', text: '#7dd3fc', headerBg: '#082f49', borderHex: '#0284c7' },
+  'command-and-control':  { bg: '#000d2b', border: '#2563eb', text: '#93c5fd', headerBg: '#172554', borderHex: '#2563eb' },
+  'exfiltration':         { bg: '#0e0026', border: '#7c3aed', text: '#c4b5fd', headerBg: '#2e1065', borderHex: '#7c3aed' },
+  'impact':               { bg: '#15002e', border: '#9333ea', text: '#d8b4fe', headerBg: '#3b0764', borderHex: '#9333ea' },
 };
 
-function getTacticColor(tacticName: string) {
+function getTacticColors(tacticName: string): TacticColors {
   const key = tacticName.toLowerCase().replace(/\s+/g, '-');
-  return TACTIC_COLORS[key] ?? { bg: 'bg-gray-800', border: 'border-gray-600', text: 'text-gray-200' };
+  return TACTIC_COLORS[key] ?? {
+    bg: '#111827', border: '#4b5563', text: '#d1d5db', headerBg: '#1f2937', borderHex: '#4b5563',
+  };
 }
 
-interface StageCardProps {
-  stage: KillChainStage;
-  isLast: boolean;
-}
+// ── Custom React Flow node ──────────────────────────────────────────────────
 
-function StageCard({ stage, isLast }: StageCardProps) {
-  const [expanded, setExpanded] = useState(false);
-  const colors = getTacticColor(stage.tactic_name);
+type StageNodeData = Node<{ stage: KillChainStage }, 'stageNode'>;
 
+const NODE_W = 190;
+const NODE_H = 115;
+
+function StageNode({ data, selected }: NodeProps<StageNodeData>) {
+  const { stage } = data;
+  const c = getTacticColors(stage.tactic_name);
   return (
-    <div className="flex items-stretch gap-0">
-      {/* Stage card */}
-      <div
-        className={`flex-1 rounded-lg border ${colors.bg} ${colors.border} overflow-hidden min-w-[160px] max-w-[220px]`}
-      >
-        {/* Tactic header */}
-        <div className={`px-3 py-1.5 border-b ${colors.border}`}>
-          <p className={`text-xs font-bold uppercase tracking-wide ${colors.text}`}>
-            {stage.tactic_name}
-          </p>
-        </div>
+    <div
+      style={{
+        width: NODE_W,
+        height: NODE_H,
+        background: c.bg,
+        border: `2px solid ${selected ? '#ffffff' : c.borderHex}`,
+        borderRadius: 10,
+        overflow: 'hidden',
+        boxShadow: selected
+          ? `0 0 0 3px ${c.borderHex}, 0 8px 24px rgba(0,0,0,0.6)`
+          : '0 4px 14px rgba(0,0,0,0.5)',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* Tactic header band */}
+      <div style={{
+        background: c.headerBg,
+        borderBottom: `1px solid ${c.borderHex}`,
+        padding: '5px 10px',
+        flexShrink: 0,
+      }}>
+        <p style={{ color: c.text, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {stage.tactic_name}
+        </p>
+      </div>
 
-        {/* Technique name + MITRE ID */}
-        <div className="px-3 pt-2 pb-1">
-          <p className="text-sm font-semibold text-white leading-snug">
-            {stage.technique_name || '—'}
-          </p>
-          {stage.mitre_id && (
-            <a
-              href={`https://attack.mitre.org/techniques/${stage.mitre_id.replace('.', '/')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-0.5 text-xs text-blue-400 hover:text-blue-300 mt-0.5"
-            >
-              {stage.mitre_id}
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          )}
-        </div>
+      {/* Technique name */}
+      <div style={{ padding: '8px 10px 4px', flex: 1 }}>
+        <p style={{ color: '#f3f4f6', fontSize: 11, fontWeight: 600, margin: 0, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          {stage.technique_name || '—'}
+        </p>
+      </div>
 
-        {/* Short description */}
-        {stage.description && (
-          <p className="px-3 pb-2 text-xs text-gray-400 leading-snug">{stage.description}</p>
-        )}
-
-        {/* Expand/collapse for detail */}
-        {(stage.actor_behavior || stage.detection_hint) && (
-          <>
-            <button
-              onClick={() => setExpanded((e) => !e)}
-              className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 border-t border-gray-700 transition-colors"
-            >
-              <span>Details</span>
-              {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            </button>
-
-            {expanded && (
-              <div className="px-3 pb-3 space-y-2 border-t border-gray-800">
-                {stage.actor_behavior && (
-                  <div>
-                    <p className="text-xs font-semibold text-orange-400 flex items-center gap-1 mt-2">
-                      <Zap className="w-3 h-3" /> Actor behaviour
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5 leading-snug">
-                      {stage.actor_behavior}
-                    </p>
-                  </div>
-                )}
-                {stage.detection_hint && (
-                  <div>
-                    <p className="text-xs font-semibold text-green-400 flex items-center gap-1">
-                      <Eye className="w-3 h-3" /> Detection hint
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5 leading-snug">
-                      {stage.detection_hint}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </>
+      {/* MITRE ID chip */}
+      <div style={{ padding: '0 10px 6px', flexShrink: 0 }}>
+        {stage.mitre_id ? (
+          <span style={{ color: c.text, background: `${c.borderHex}33`, border: `1px solid ${c.borderHex}`, borderRadius: 4, fontSize: 9, fontFamily: 'monospace', fontWeight: 700, padding: '2px 6px' }}>
+            {stage.mitre_id}
+          </span>
+        ) : (
+          <span style={{ color: '#6b7280', fontSize: 9 }}>—</span>
         )}
       </div>
 
-      {/* Arrow connector */}
-      {!isLast && (
-        <div className="flex items-center px-1 flex-shrink-0">
-          <ChevronRight className="w-5 h-5 text-gray-600" />
-        </div>
-      )}
+      {/* Hint bar */}
+      <div style={{ borderTop: '1px solid #374151', padding: '3px 10px', flexShrink: 0 }}>
+        <p style={{ color: '#6b7280', fontSize: 9, margin: 0 }}>Click to expand</p>
+      </div>
+
+      <Handle type="target" position={Position.Left} style={{ background: '#6b7280', width: 8, height: 8, border: 'none' }} />
+      <Handle type="source" position={Position.Right} style={{ background: '#6b7280', width: 8, height: 8, border: 'none' }} />
     </div>
   );
 }
+
+const nodeTypes = { stageNode: StageNode };
+
+// ── Detail drawer component ─────────────────────────────────────────────────
+
+function StageDrawer({ stage, onClose }: { stage: KillChainStage; onClose: () => void }) {
+  const c = getTacticColors(stage.tactic_name);
+  const mitreUrl = stage.mitre_id
+    ? `https://attack.mitre.org/techniques/${stage.mitre_id.replace('.', '/')}/`
+    : null;
+
+  return (
+    <div className="absolute right-0 top-0 h-full w-72 bg-gray-900 border-l border-gray-700 shadow-2xl z-20 flex flex-col">
+      {/* Header */}
+      <div
+        className="px-4 py-3 border-b flex items-start justify-between gap-2 flex-shrink-0"
+        style={{ background: c.headerBg, borderColor: c.borderHex }}
+      >
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-widest truncate" style={{ color: c.text }}>
+            Stage {stage.stage_number} · {stage.tactic_name}
+          </p>
+          <p className="text-sm font-bold text-white mt-0.5 leading-snug">
+            {stage.technique_name || '—'}
+          </p>
+          {stage.mitre_id && mitreUrl && (
+            <a
+              href={mitreUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-mono mt-1 hover:underline"
+              style={{ color: c.text }}
+            >
+              {stage.mitre_id} <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </div>
+        <button onClick={onClose} className="text-gray-500 hover:text-white flex-shrink-0 mt-0.5">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Scrollable body */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {stage.description && (
+          <section>
+            <h5 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide flex items-center gap-1 mb-1.5">
+              <FileText className="w-3 h-3" /> Technique Description
+            </h5>
+            <p className="text-xs text-gray-300 leading-relaxed">{stage.description}</p>
+          </section>
+        )}
+        {stage.actor_behavior && (
+          <section>
+            <h5 className="text-[11px] font-semibold text-orange-400 uppercase tracking-wide flex items-center gap-1 mb-1.5">
+              <Zap className="w-3 h-3" /> Adversary Behaviour
+            </h5>
+            <p className="text-xs text-gray-300 leading-relaxed">{stage.actor_behavior}</p>
+          </section>
+        )}
+        {stage.detection_hint && (
+          <section>
+            <h5 className="text-[11px] font-semibold text-green-400 uppercase tracking-wide flex items-center gap-1 mb-1.5">
+              <Eye className="w-3 h-3" /> Detection Guidance
+            </h5>
+            <p className="text-xs text-gray-300 leading-relaxed">{stage.detection_hint}</p>
+          </section>
+        )}
+        {!stage.description && !stage.actor_behavior && !stage.detection_hint && (
+          <p className="text-xs text-gray-500 italic">No additional detail available for this stage.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ──────────────────────────────────────────────────────────
 
 interface KillChainFlowProps {
   killChain: KillChain;
   onDelete?: (id: string) => Promise<void>;
 }
 
+const H_GAP = 60;
+const CANVAS_H = 220;
+
 export function KillChainFlow({ killChain, onDelete }: KillChainFlowProps) {
   const [deleting, setDeleting] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const selectedStage = selectedId
+    ? killChain.stages.find((s) => s.id === selectedId) ?? null
+    : null;
+
+  const nodes: Node[] = useMemo(
+    () =>
+      killChain.stages.map((stage, idx) => ({
+        id: stage.id,
+        type: 'stageNode',
+        position: { x: idx * (NODE_W + H_GAP), y: (CANVAS_H - NODE_H) / 2 - 20 },
+        selectable: true,
+        selected: stage.id === selectedId,
+        data: { stage } as unknown as Record<string, unknown>,
+      })),
+    [killChain.stages, selectedId],
+  );
+
+  const edges: Edge[] = useMemo(
+    () =>
+      killChain.stages.slice(0, -1).map((stage, idx) => ({
+        id: `e-${idx}`,
+        source: stage.id,
+        target: killChain.stages[idx + 1].id,
+        type: 'smoothstep',
+        style: { stroke: '#4b5563', strokeWidth: 2 },
+      })),
+    [killChain.stages],
+  );
 
   async function handleDelete() {
     if (!onDelete) return;
-    if (!confirm('Delete this kill chain scenario?')) return;
+    if (!confirm('Delete this scenario?')) return;
     setDeleting(true);
     try {
       await onDelete(killChain.id);
@@ -162,7 +268,7 @@ export function KillChainFlow({ killChain, onDelete }: KillChainFlowProps) {
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
       {/* Scenario header */}
-      <div className="flex items-start justify-between p-4 border-b border-gray-800">
+      <div className="flex items-start justify-between px-4 py-3 border-b border-gray-800">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <Target className="w-4 h-4 text-red-400 flex-shrink-0" />
@@ -172,21 +278,18 @@ export function KillChainFlow({ killChain, onDelete }: KillChainFlowProps) {
                 {killChain.threat_actor}
               </span>
             )}
-            {killChain.generated_by_ai && (
-              <span className="text-xs bg-purple-900/40 border border-purple-800 text-purple-300 px-2 py-0.5 rounded-full">
-                AI generated
-              </span>
-            )}
+            <span className="text-xs bg-gray-800 border border-gray-600 text-gray-400 px-2 py-0.5 rounded-full">
+              {killChain.stages.length} stage{killChain.stages.length !== 1 ? 's' : ''} · ATT&amp;CK validated
+            </span>
           </div>
           {killChain.description && (
-            <p className="text-xs text-gray-400 mt-1">{killChain.description}</p>
+            <p className="text-xs text-gray-400 mt-1 leading-snug">{killChain.description}</p>
           )}
-          <p className="text-xs text-gray-600 mt-1">
-            {killChain.stages.length} stages · generated{' '}
-            {new Date(killChain.created_at).toLocaleDateString()}
+          <p className="text-[11px] text-gray-600 mt-0.5">
+            {new Date(killChain.created_at).toLocaleDateString()} ·{' '}
+            {selectedStage ? 'Click another stage or click selected to close' : 'Click a stage to inspect'}
           </p>
         </div>
-
         {onDelete && (
           <button
             onClick={handleDelete}
@@ -194,33 +297,40 @@ export function KillChainFlow({ killChain, onDelete }: KillChainFlowProps) {
             className="ml-3 flex-shrink-0 text-gray-600 hover:text-red-400 disabled:opacity-40 transition-colors"
             title="Delete scenario"
           >
-            {deleting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Trash2 className="w-4 h-4" />
-            )}
+            {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
           </button>
         )}
       </div>
 
-      {/* Kill chain stages – horizontal scrollable flow */}
-      <div className="p-4 overflow-x-auto">
-        <div className="flex items-stretch gap-0 pb-2" style={{ minWidth: 'max-content' }}>
-          {killChain.stages.map((stage, idx) => (
-            <StageCard
-              key={stage.id}
-              stage={stage}
-              isLast={idx === killChain.stages.length - 1}
-            />
-          ))}
-        </div>
-      </div>
+      {/* React Flow canvas with detail drawer overlay */}
+      <div className="relative" style={{ height: CANVAS_H }}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          minZoom={0.3}
+          maxZoom={1.8}
+          proOptions={{ hideAttribution: true }}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          onNodeClick={(_evt, node) =>
+            setSelectedId((prev) => (prev === node.id ? null : node.id))
+          }
+          onPaneClick={() => setSelectedId(null)}
+        >
+          <Background color="#374151" gap={20} size={1} />
+          <Controls
+            showInteractive={false}
+            style={{ bottom: 10, left: 10 }}
+          />
+        </ReactFlow>
 
-      {/* Stage count legend */}
-      <div className="px-4 pb-3 flex items-center gap-2 text-xs text-gray-600">
-        <Shield className="w-3 h-3" />
-        <span>{killChain.stages.length} attack stages</span>
-        {killChain.model_id && <span>· {killChain.model_id}</span>}
+        {/* Slide-in detail drawer */}
+        {selectedStage && (
+          <StageDrawer stage={selectedStage} onClose={() => setSelectedId(null)} />
+        )}
       </div>
     </div>
   );
