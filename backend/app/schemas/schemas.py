@@ -336,6 +336,7 @@ class AttackTacticRead(BaseModel):
     shortname: str
     description: Optional[str] = None
     url: Optional[str] = None
+    phase_order: Optional[int] = None
     technique_count: Optional[int] = None
 
     class Config:
@@ -350,6 +351,7 @@ class AttackTechniqueRead(BaseModel):
     tactic_id: Optional[UUID] = None
     tactic_shortname: Optional[str] = None
     description: Optional[str] = None
+    detection_text: Optional[str] = None
     platforms: List[str] = []
     data_sources: List[str] = []
     mitigations: List[str] = []
@@ -422,6 +424,7 @@ class KillChainStageRead(BaseModel):
     id: UUID
     stage_number: int
     tactic_name: str
+    technique_id: Optional[UUID] = None
     technique_name: Optional[str] = None
     mitre_id: Optional[str] = None
     description: Optional[str] = None
