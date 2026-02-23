@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield, Upload, FileText, Download, X, Check, Loader2, RefreshCw, Sparkles, UserCheck, ChevronDown, ArrowRightCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield, Upload, FileText, Download, X, Check, Loader2, RefreshCw, Sparkles, UserCheck, ChevronDown, ArrowRightCircle, Brain, Network, Boxes, Database } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { LoadingPage } from '../../../components/LoadingSpinner';
 import { Alert } from '../../../components/Alert';
@@ -11,6 +11,10 @@ import { StatusBadge, SeverityBadge } from '../../../components/Badge';
 import { ThreatModal, ThreatFormData } from '../../../components/ThreatModal';
 import { IntelligencePanel, AiBadge } from '../../../components/IntelligencePanel';
 import { AttackContextPanel } from '../../../components/AttackContextPanel';
+import { IntelEnrichmentPanel, EnrichmentBadge } from '../../../components/IntelEnrichmentPanel';
+import { MLScoringPanel, MLScoreBadge } from '../../../components/MLScoringPanel';
+import { ThreatGraphPanel } from '../../../components/ThreatGraphPanel';
+import { ClusteringPanel } from '../../../components/ClusteringPanel';
 import apiClient from '../../../lib/api-client';
 import { Assessment, Threat, ActiveRisk, Recommendation, Evidence } from '../../../lib/types';
 import { format } from 'date-fns';
@@ -45,6 +49,9 @@ export default function AssessmentDetailPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [threatsExpanded, setThreatsExpanded] = useState(false);
+
+  // Analytics tab state
+  const [analyticsTab, setAnalyticsTab] = useState<'intel' | 'ml' | 'graph' | 'cluster'>('intel');
 
   const ALLOWED_TYPES = [
     'application/pdf',
@@ -607,6 +614,47 @@ export default function AssessmentDetailPage() {
         )}
       </div>
 
+      {/* Advanced Analytics Section */}
+      <div className="bg-white rounded-lg border border-gray-200 mb-6">
+        <div className="border-b border-gray-200 px-4">
+          <nav className="flex -mb-px gap-1">
+            {[
+              { key: 'intel' as const, label: 'Intel Enrichment', icon: Database },
+              { key: 'ml' as const, label: 'ML Scoring', icon: Brain },
+              { key: 'graph' as const, label: 'Threat Graph', icon: Network },
+              { key: 'cluster' as const, label: 'Clustering', icon: Boxes },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setAnalyticsTab(tab.key)}
+                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  analyticsTab === tab.key
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <tab.icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+        <div className="p-4">
+          {analyticsTab === 'intel' && (
+            <IntelEnrichmentPanel assessmentId={assessmentId} threatIds={threats.map(t => t.id)} onEnrichComplete={loadAssessmentData} />
+          )}
+          {analyticsTab === 'ml' && (
+            <MLScoringPanel assessmentId={assessmentId} onScoreComplete={loadAssessmentData} />
+          )}
+          {analyticsTab === 'graph' && (
+            <ThreatGraphPanel assessmentId={assessmentId} />
+          )}
+          {analyticsTab === 'cluster' && (
+            <ClusteringPanel assessmentId={assessmentId} />
+          )}
+        </div>
+      </div>
+
       {/* Threats List */}
       <div className="mb-6">
         <button
@@ -761,6 +809,8 @@ function ThreatCard({
                 Analyst Reviewed
               </span>
             )}
+            <EnrichmentBadge threatId={threat.id} />
+            <MLScoreBadge threatId={threat.id} />
             <SeverityBadge severity={threat.severity} />
           </div>
           {threat.description && (

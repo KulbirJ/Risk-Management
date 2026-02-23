@@ -10,7 +10,8 @@ import {
   Shield, 
   History,
   Menu,
-  LogOut
+  LogOut,
+  Brain
 } from 'lucide-react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { isCognitoEnabled } from '../lib/amplify-config';
@@ -22,6 +23,7 @@ interface LayoutProps {
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Assessments', href: '/assessments', icon: FileText },
+  { name: 'Intelligence', href: '/intelligence', icon: Brain },
   { name: 'Risk Register', href: '/active-risks', icon: AlertTriangle },
   { name: 'Audit Logs', href: '/audit-logs', icon: History },
 ];

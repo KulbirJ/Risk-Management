@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { FileText, AlertTriangle, Shield, TrendingUp, Plus } from 'lucide-react';
+import { FileText, AlertTriangle, Shield, TrendingUp, Plus, Brain } from 'lucide-react';
 import { Button } from '../components/Button';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { Alert } from '../components/Alert';
 import apiClient from '../lib/api-client';
-import { Assessment, ActiveRisk } from '../lib/types';
+import { Assessment, ActiveRisk, MLModelInfo } from '../lib/types';
 import { StatusBadge } from '../components/Badge';
 import { format } from 'date-fns';
 
@@ -21,6 +21,7 @@ export default function DashboardPage() {
   });
   const [recentAssessments, setRecentAssessments] = useState<Assessment[]>([]);
   const [topRisks, setTopRisks] = useState<ActiveRisk[]>([]);
+  const [mlModel, setMlModel] = useState<MLModelInfo | null>(null);
 
   useEffect(() => {
     loadDashboardData();
@@ -32,13 +33,15 @@ export default function DashboardPage() {
       setError(null);
 
       // Load stats and recent data
-      const [assessmentsResponse, risksResponse] = await Promise.all([
+      const [assessmentsResponse, risksResponse, mlModelInfo] = await Promise.all([
         apiClient.getAssessments({ limit: 5 }),
         apiClient.getActiveRisks({ status: 'open' }).catch(() => []),
+        apiClient.getMLModelInfo().catch(() => null),
       ]);
 
       const assessments = assessmentsResponse;
       const risks = risksResponse;
+      setMlModel(mlModelInfo);
 
       setStats({
         totalAssessments: assessments.length,
@@ -79,7 +82,7 @@ export default function DashboardPage() {
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -115,6 +118,23 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        <Link href="/intelligence" className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">ML Model</p>
+              <p className={`text-xl font-bold mt-2 ${mlModel?.trained ? 'text-green-600' : 'text-amber-600'}`}>
+                {mlModel?.trained ? 'Trained' : 'Not Trained'}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {mlModel?.trained ? `${mlModel.algorithm || mlModel.model_type} · ${mlModel.features} features` : 'Click to configure'}
+              </p>
+            </div>
+            <div className="bg-purple-100 rounded-lg p-3">
+              <Brain className="w-8 h-8 text-purple-600" />
+            </div>
+          </div>
+        </Link>
       </div>
 
       {/* Recent Assessments */}

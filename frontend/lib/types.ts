@@ -254,3 +254,216 @@ export interface AttackSyncStatus {
   source_url?: string;
   error_message?: string;
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 1: Intel Enrichment Types
+// ─────────────────────────────────────────────────────────────────
+
+export interface ThreatEnrichRequest {
+  assessment_id?: string;
+  threat_ids?: string[];
+  force_refresh?: boolean;
+}
+
+export interface ThreatEnrichResponse {
+  status: string;
+  threats_enriched: number;
+  results?: Record<string, any>;
+  errors?: string[];
+}
+
+export interface EnrichmentRecord {
+  id: string;
+  source: string;
+  source_id?: string;
+  severity_score?: number;
+  feature_vector?: Record<string, any>;
+  fetched_at?: string;
+  expires_at?: string;
+  is_stale?: boolean;
+}
+
+export interface ThreatEnrichmentsResponse {
+  threat_id: string;
+  enrichment_count: number;
+  enrichments: EnrichmentRecord[];
+}
+
+export interface EnrichmentSummary {
+  threat_id: string;
+  total_sources: number;
+  highest_severity: number;
+  sources: string[];
+  last_enriched?: string;
+}
+
+export interface AttackGroup {
+  id: string;
+  stix_id?: string;
+  name: string;
+  aliases: string[];
+  description?: string;
+  technique_count: number;
+  target_sectors: string[];
+  first_seen?: string;
+  last_seen?: string;
+  url?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 2: ML Scoring & Survival Types
+// ─────────────────────────────────────────────────────────────────
+
+export interface MLModelInfo {
+  trained: boolean;
+  features: number;
+  model_type?: string;
+  algorithm?: string;
+  accuracy?: number;
+  trained_at?: string;
+  sample_count?: number;
+}
+
+export interface MLScoreResult {
+  threat_id: string;
+  score: number;
+  confidence?: number;
+  features_used?: string[];
+  scored_at?: string;
+}
+
+export interface MLBatchScoreResponse {
+  scored: number;
+  results: MLScoreResult[];
+  errors?: string[];
+}
+
+export interface MLExplanation {
+  threat_id: string;
+  score?: number;
+  feature_contributions: Record<string, number>;
+  top_factors: { feature: string; contribution: number; direction: string }[];
+}
+
+export interface MLBiasReport {
+  sector_count: number;
+  total_scored: number;
+  sectors: {
+    sector: string;
+    count: number;
+    avg_score: number;
+    std_dev: number;
+  }[];
+}
+
+export interface MLTrainRequest {
+  algorithm?: string;
+  min_samples?: number;
+}
+
+export interface MLTrainResponse {
+  status: string;
+  algorithm: string;
+  samples: number;
+  accuracy?: number;
+  feature_importances?: Record<string, number>;
+}
+
+export interface SurvivalCurvePoint {
+  time_days: number;
+  probability: number;
+}
+
+export interface SurvivalCurveResponse {
+  curve_points: SurvivalCurvePoint[];
+  median_days?: number;
+  sector?: string;
+}
+
+export interface SurvivalEstimateResponse {
+  estimated_count: number;
+  estimates: {
+    active_risk_id: string;
+    estimated_persistence_days: number;
+    confidence?: number;
+  }[];
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 3: Graph Mapping Types
+// ─────────────────────────────────────────────────────────────────
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: string;
+  severity?: string;
+  score?: number;
+  pagerank?: number;
+  betweenness?: number;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  relationship: string;
+  weight?: number;
+}
+
+export interface AssessmentGraph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  node_count: number;
+  edge_count: number;
+}
+
+export interface CriticalNode {
+  id: string;
+  label: string;
+  type: string;
+  pagerank: number;
+  betweenness: number;
+  combined_score: number;
+}
+
+export interface CriticalNodesResponse {
+  assessment_id: string;
+  top_critical: CriticalNode[];
+}
+
+export interface NeighbourhoodResponse {
+  threat_id: string;
+  depth: number;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 4: Clustering Types
+// ─────────────────────────────────────────────────────────────────
+
+export interface ClusterResult {
+  cluster_id: number;
+  label?: string;
+  threats: { id: string; title: string; similarity?: number }[];
+  centroid_features?: Record<string, number>;
+}
+
+export interface ClusteringResponse {
+  clusters: ClusterResult[];
+  noise: number;
+  quality?: number;
+  total_threats: number;
+}
+
+export interface SimilarThreat {
+  id: string;
+  title: string;
+  similarity: number;
+  assessment_id?: string;
+}
+
+export interface SimilarThreatsResponse {
+  threat_id: string;
+  similar_threats: SimilarThreat[];
+}

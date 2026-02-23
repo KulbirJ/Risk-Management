@@ -18,6 +18,25 @@ import type {
   AutoMapResponse,
   KillChain,
   AttackSyncStatus,
+  ThreatEnrichRequest,
+  ThreatEnrichResponse,
+  ThreatEnrichmentsResponse,
+  EnrichmentSummary,
+  AttackGroup,
+  MLModelInfo,
+  MLBatchScoreResponse,
+  MLScoreResult,
+  MLExplanation,
+  MLBiasReport,
+  MLTrainRequest,
+  MLTrainResponse,
+  SurvivalCurveResponse,
+  SurvivalEstimateResponse,
+  AssessmentGraph,
+  CriticalNodesResponse,
+  NeighbourhoodResponse,
+  ClusteringResponse,
+  SimilarThreatsResponse,
 } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -406,6 +425,140 @@ class APIClient {
 
   async deleteKillChain(killChainId: string): Promise<void> {
     await this.client.delete(`/attack/kill-chains/${killChainId}`);
+  }
+
+  // ─── Phase 1: Intel Enrichment ─────────────────────────────────
+
+  async enrichThreats(body: ThreatEnrichRequest): Promise<ThreatEnrichResponse> {
+    const { data } = await this.client.post('/intel/enrich', body);
+    return data;
+  }
+
+  async getThreatEnrichments(threatId: string): Promise<ThreatEnrichmentsResponse> {
+    const { data } = await this.client.get(`/intel/threats/${threatId}/enrichments`);
+    return data;
+  }
+
+  async getThreatEnrichmentSummary(threatId: string): Promise<EnrichmentSummary> {
+    const { data } = await this.client.get(`/intel/threats/${threatId}/summary`);
+    return data;
+  }
+
+  async getIntelSectors(): Promise<{ sectors: string[] }> {
+    const { data } = await this.client.get('/intel/sectors');
+    return data;
+  }
+
+  async getSectorFrequency(sector: string, catalogueKey: string): Promise<any> {
+    const { data } = await this.client.get(`/intel/sectors/${sector}/frequency`, {
+      params: { catalogue_key: catalogueKey },
+    });
+    return data;
+  }
+
+  async getAttackGroups(params?: { search?: string; sector?: string; skip?: number; limit?: number }): Promise<{ count: number; groups: AttackGroup[] }> {
+    const { data } = await this.client.get('/intel/attack-groups', { params });
+    return data;
+  }
+
+  async getAttackGroup(groupId: string): Promise<AttackGroup> {
+    const { data } = await this.client.get(`/intel/attack-groups/${groupId}`);
+    return data;
+  }
+
+  // ─── Phase 2: ML Scoring & Survival ────────────────────────────
+
+  async getMLModelInfo(): Promise<MLModelInfo> {
+    const { data } = await this.client.get('/ml/model-info');
+    return data;
+  }
+
+  async trainMLModel(body?: MLTrainRequest): Promise<MLTrainResponse> {
+    const { data } = await this.client.post('/ml/train', body || {});
+    return data;
+  }
+
+  async scoreThreats(body: { assessment_id?: string; threat_ids?: string[]; persist?: boolean }): Promise<MLBatchScoreResponse> {
+    const { data } = await this.client.post('/ml/score', body);
+    return data;
+  }
+
+  async scoreSingleThreat(threatId: string): Promise<MLScoreResult> {
+    const { data } = await this.client.get(`/ml/score/${threatId}`);
+    return data;
+  }
+
+  async explainThreatScore(threatId: string): Promise<MLExplanation> {
+    const { data } = await this.client.get(`/ml/explain/${threatId}`);
+    return data;
+  }
+
+  async getMLBiasReport(): Promise<MLBiasReport> {
+    const { data } = await this.client.get('/ml/bias-report');
+    return data;
+  }
+
+  async estimateSurvival(body: { active_risk_id?: string; assessment_id?: string; persist?: boolean }): Promise<SurvivalEstimateResponse> {
+    const { data } = await this.client.post('/ml/survival', body);
+    return data;
+  }
+
+  async getSurvivalCurve(sector?: string): Promise<SurvivalCurveResponse> {
+    const { data } = await this.client.get('/ml/survival/curve', {
+      params: sector ? { sector } : undefined,
+    });
+    return data;
+  }
+
+  // ─── Phase 3: Graph Mapping ────────────────────────────────────
+
+  async getAssessmentGraph(assessmentId: string): Promise<AssessmentGraph> {
+    const { data } = await this.client.get(`/graph/assessment/${assessmentId}`);
+    return data;
+  }
+
+  async getCriticalNodes(assessmentId: string, topN = 10): Promise<CriticalNodesResponse> {
+    const { data } = await this.client.get(`/graph/assessment/${assessmentId}/critical`, {
+      params: { top_n: topN },
+    });
+    return data;
+  }
+
+  async getThreatNeighbourhood(threatId: string, depth = 2): Promise<NeighbourhoodResponse> {
+    const { data } = await this.client.get(`/graph/threat/${threatId}/neighbourhood`, {
+      params: { depth },
+    });
+    return data;
+  }
+
+  async getShortestPath(assessmentId: string, source: string, target: string): Promise<any> {
+    const { data } = await this.client.get(`/graph/assessment/${assessmentId}/path`, {
+      params: { source, target },
+    });
+    return data;
+  }
+
+  // ─── Phase 4: Clustering ──────────────────────────────────────
+
+  async clusterAssessment(assessmentId: string, eps = 0.8, minSamples = 2): Promise<ClusteringResponse> {
+    const { data } = await this.client.post(`/clusters/assessment/${assessmentId}`, {
+      eps, min_samples: minSamples,
+    });
+    return data;
+  }
+
+  async clusterTenant(eps = 0.8, minSamples = 2): Promise<ClusteringResponse> {
+    const { data } = await this.client.post('/clusters/tenant', {
+      eps, min_samples: minSamples,
+    });
+    return data;
+  }
+
+  async findSimilarThreats(threatId: string, topN = 5): Promise<SimilarThreatsResponse> {
+    const { data } = await this.client.get(`/clusters/similar/${threatId}`, {
+      params: { top_n: topN },
+    });
+    return data;
   }
 }
 
