@@ -46,7 +46,7 @@ export function ThreatGraphPanel({ assessmentId }: ThreatGraphPanelProps) {
         apiClient.getCriticalNodes(assessmentId, 10),
       ]);
       setGraph(graphData);
-      setCriticalNodes(criticalData.top_critical || []);
+      setCriticalNodes(criticalData.critical_nodes || []);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load graph');
     } finally {
@@ -112,10 +112,10 @@ export function ThreatGraphPanel({ assessmentId }: ThreatGraphPanelProps) {
           {/* Stats bar */}
           <div className="flex gap-4 mb-4 text-sm">
             <span className="text-gray-600">
-              <strong className="text-gray-900">{graph.node_count}</strong> nodes
+              <strong className="text-gray-900">{graph.stats.node_count}</strong> nodes
             </span>
             <span className="text-gray-600">
-              <strong className="text-gray-900">{graph.edge_count}</strong> edges
+              <strong className="text-gray-900">{graph.stats.edge_count}</strong> edges
             </span>
           </div>
 
@@ -244,7 +244,7 @@ export function ThreatGraphPanel({ assessmentId }: ThreatGraphPanelProps) {
                       <p>Betweenness</p>
                     </div>
                     <div className="text-center">
-                      <p className="font-bold text-indigo-700">{node.combined_score.toFixed(4)}</p>
+                      <p className="font-bold text-indigo-700">{node.composite_score.toFixed(4)}</p>
                       <p>Combined</p>
                     </div>
                   </div>

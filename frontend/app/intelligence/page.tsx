@@ -61,7 +61,7 @@ export default function IntelligencePage() {
     try {
       setError(null);
       const res = await apiClient.clusterTenant();
-      setTrainResult({ status: 'clustered', clusters: res.clusters?.length || 0, threats: res.total_threats });
+      setTrainResult({ status: 'clustered', clusters: res.clusters_found || 0, threats: res.quality?.n_threats || 0 });
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Clustering failed');
     }
@@ -111,7 +111,7 @@ export default function IntelligencePage() {
           iconBg="bg-purple-100"
           title="ML Model"
           value={modelInfo?.trained ? 'Trained' : 'Not Trained'}
-          subtitle={modelInfo?.algorithm || modelInfo?.model_type || 'N/A'}
+          subtitle={modelInfo?.algorithm || 'N/A'}
           valueColor={modelInfo?.trained ? 'text-green-600' : 'text-amber-600'}
         />
         <StatCard
@@ -119,7 +119,7 @@ export default function IntelligencePage() {
           iconColor="text-blue-600"
           iconBg="bg-blue-100"
           title="Features"
-          value={String(modelInfo?.features || 0)}
+          value={String(modelInfo?.feature_count || 0)}
           subtitle="Input dimensions"
         />
         <StatCard
@@ -127,15 +127,15 @@ export default function IntelligencePage() {
           iconColor="text-emerald-600"
           iconBg="bg-emerald-100"
           title="Accuracy"
-          value={modelInfo?.accuracy ? `${(modelInfo.accuracy * 100).toFixed(1)}%` : 'N/A'}
-          subtitle={modelInfo?.sample_count ? `${modelInfo.sample_count} samples` : 'No data'}
+          value={modelInfo?.metrics?.accuracy ? `${(modelInfo.metrics.accuracy * 100).toFixed(1)}%` : 'N/A'}
+          subtitle={modelInfo?.training_samples ? `${modelInfo.training_samples} samples` : 'No data'}
         />
         <StatCard
           icon={Activity}
           iconColor="text-indigo-600"
           iconBg="bg-indigo-100"
           title="Median Risk Persistence"
-          value={survivalCurve?.median_days ? `${survivalCurve.median_days}d` : 'N/A'}
+          value={survivalCurve?.median_survival_days ? `${survivalCurve.median_survival_days}d` : 'N/A'}
           subtitle="Time risks remain open"
         />
       </div>
@@ -147,32 +147,32 @@ export default function IntelligencePage() {
           <h2 className="text-lg font-semibold text-gray-900">Bias Monitoring</h2>
           <span className="text-sm text-gray-500 ml-2">Score distribution across sectors</span>
         </div>
-        {biasReport && biasReport.sectors && biasReport.sectors.length > 0 ? (
+        {biasReport && biasReport.sectors && Object.keys(biasReport.sectors).length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-2 px-3 text-gray-600 font-medium">Sector</th>
                   <th className="text-right py-2 px-3 text-gray-600 font-medium">Threats</th>
-                  <th className="text-right py-2 px-3 text-gray-600 font-medium">Avg Score</th>
+                  <th className="text-right py-2 px-3 text-gray-600 font-medium">Mean Score</th>
                   <th className="text-right py-2 px-3 text-gray-600 font-medium">Std Dev</th>
                   <th className="text-left py-2 px-3 text-gray-600 font-medium">Distribution</th>
                 </tr>
               </thead>
               <tbody>
-                {biasReport.sectors.map((s) => (
-                  <tr key={s.sector} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-2 px-3 font-medium text-gray-900 capitalize">{s.sector}</td>
+                {Object.entries(biasReport.sectors).map(([sectorName, s]) => (
+                  <tr key={sectorName} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="py-2 px-3 font-medium text-gray-900 capitalize">{sectorName}</td>
                     <td className="py-2 px-3 text-right text-gray-700">{s.count}</td>
-                    <td className="py-2 px-3 text-right font-bold text-gray-900">{s.avg_score.toFixed(1)}</td>
-                    <td className="py-2 px-3 text-right text-gray-600">{s.std_dev.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right font-bold text-gray-900">{s.mean.toFixed(1)}</td>
+                    <td className="py-2 px-3 text-right text-gray-600">{s.std.toFixed(2)}</td>
                     <td className="py-2 px-3">
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
                           className={`h-2 rounded-full ${
-                            s.avg_score >= 70 ? 'bg-red-500' : s.avg_score >= 50 ? 'bg-amber-500' : 'bg-green-500'
+                            s.mean >= 70 ? 'bg-red-500' : s.mean >= 50 ? 'bg-amber-500' : 'bg-green-500'
                           }`}
-                          style={{ width: `${Math.min(s.avg_score, 100)}%` }}
+                          style={{ width: `${Math.min(s.mean, 100)}%` }}
                         />
                       </div>
                     </td>
@@ -195,22 +195,22 @@ export default function IntelligencePage() {
           <h2 className="text-lg font-semibold text-gray-900">Survival Analysis</h2>
           <span className="text-sm text-gray-500 ml-2">Risk persistence over time</span>
         </div>
-        {survivalCurve && survivalCurve.curve_points.length > 0 ? (
+        {survivalCurve && survivalCurve.timeline_days && survivalCurve.timeline_days.length > 0 ? (
           <div>
             <div className="flex items-end gap-1 h-32 bg-gray-50 rounded-lg p-4">
-              {survivalCurve.curve_points.map((point, i) => (
+              {survivalCurve.timeline_days.map((day, i) => (
                 <div
                   key={i}
                   className="flex-1 bg-indigo-400 hover:bg-indigo-500 rounded-t transition-colors cursor-pointer"
-                  style={{ height: `${point.probability * 100}%` }}
-                  title={`Day ${point.time_days}: ${(point.probability * 100).toFixed(1)}% probability`}
+                  style={{ height: `${(survivalCurve.survival_probability[i] || 0) * 100}%` }}
+                  title={`Day ${day}: ${((survivalCurve.survival_probability[i] || 0) * 100).toFixed(1)}% probability`}
                 />
               ))}
             </div>
             <div className="flex justify-between text-xs text-gray-400 mt-1 px-4">
               <span>Day 0</span>
-              {survivalCurve.median_days && <span>Median: Day {survivalCurve.median_days}</span>}
-              <span>Day {survivalCurve.curve_points[survivalCurve.curve_points.length - 1]?.time_days}</span>
+              {survivalCurve.median_survival_days && <span>Median: Day {survivalCurve.median_survival_days}</span>}
+              <span>Day {survivalCurve.timeline_days[survivalCurve.timeline_days.length - 1]}</span>
             </div>
           </div>
         ) : (

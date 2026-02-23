@@ -127,7 +127,7 @@ export default function DashboardPage() {
                 {mlModel?.trained ? 'Trained' : 'Not Trained'}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                {mlModel?.trained ? `${mlModel.algorithm || mlModel.model_type} · ${mlModel.features} features` : 'Click to configure'}
+                {mlModel?.trained ? `${mlModel.algorithm} · ${mlModel.feature_count} features` : 'Click to configure'}
               </p>
             </div>
             <div className="bg-purple-100 rounded-lg p-3">

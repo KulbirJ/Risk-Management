@@ -316,12 +316,12 @@ export interface AttackGroup {
 
 export interface MLModelInfo {
   trained: boolean;
-  features: number;
-  model_type?: string;
+  feature_count: number;
   algorithm?: string;
-  accuracy?: number;
   trained_at?: string;
-  sample_count?: number;
+  training_samples?: number;
+  feature_keys?: string[];
+  metrics?: Record<string, number>;
 }
 
 export interface MLScoreResult {
@@ -338,22 +338,37 @@ export interface MLBatchScoreResponse {
   errors?: string[];
 }
 
+export interface MLExplanationComponent {
+  feature: string;
+  value: number;
+  points: number;
+  max: number;
+}
+
 export interface MLExplanation {
   threat_id: string;
-  score?: number;
-  feature_contributions: Record<string, number>;
-  top_factors: { feature: string; contribution: number; direction: string }[];
+  threat_title?: string;
+  likelihood_score?: number;
+  method?: string;
+  components: MLExplanationComponent[];
+  total_points: number;
+  max_possible: number;
+}
+
+export interface MLBiasSectorStats {
+  count: number;
+  mean: number;
+  median: number;
+  std: number;
+  min: number;
+  max: number;
+  quartiles?: Record<string, number>;
 }
 
 export interface MLBiasReport {
-  sector_count: number;
-  total_scored: number;
-  sectors: {
-    sector: string;
-    count: number;
-    avg_score: number;
-    std_dev: number;
-  }[];
+  sectors: Record<string, MLBiasSectorStats>;
+  total_threats: number;
+  generated_at?: string;
 }
 
 export interface MLTrainRequest {
@@ -375,9 +390,14 @@ export interface SurvivalCurvePoint {
 }
 
 export interface SurvivalCurveResponse {
-  curve_points: SurvivalCurvePoint[];
-  median_days?: number;
-  sector?: string;
+  method?: string;
+  sector?: string | null;
+  median_survival_days?: number;
+  timeline_days: number[];
+  survival_probability: number[];
+  n_observations?: number;
+  n_events?: number;
+  note?: string;
 }
 
 export interface SurvivalEstimateResponse {
@@ -410,11 +430,19 @@ export interface GraphEdge {
   weight?: number;
 }
 
-export interface AssessmentGraph {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
+export interface GraphStats {
   node_count: number;
   edge_count: number;
+  density?: number;
+  components?: number;
+}
+
+export interface AssessmentGraph {
+  assessment_id?: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  pagerank?: Record<string, number>;
+  stats: GraphStats;
 }
 
 export interface CriticalNode {
@@ -423,12 +451,13 @@ export interface CriticalNode {
   type: string;
   pagerank: number;
   betweenness: number;
-  combined_score: number;
+  composite_score: number;
 }
 
 export interface CriticalNodesResponse {
   assessment_id: string;
-  top_critical: CriticalNode[];
+  critical_nodes: CriticalNode[];
+  total_nodes?: number;
 }
 
 export interface NeighbourhoodResponse {
@@ -442,28 +471,38 @@ export interface NeighbourhoodResponse {
 // Phase 4: Clustering Types
 // ─────────────────────────────────────────────────────────────────
 
-export interface ClusterResult {
+export interface ClusterThreat {
+  threat_id: string;
+  title?: string;
   cluster_id: number;
-  label?: string;
-  threats: { id: string; title: string; similarity?: number }[];
-  centroid_features?: Record<string, number>;
+  is_outlier: boolean;
+  likelihood_score?: number;
+  severity?: string;
+}
+
+export interface ClusterQuality {
+  n_clusters: number;
+  n_outliers: number;
+  n_threats: number;
+  silhouette_score?: number;
 }
 
 export interface ClusteringResponse {
-  clusters: ClusterResult[];
-  noise: number;
-  quality?: number;
-  total_threats: number;
+  scope: string;
+  clusters_found: number;
+  quality: ClusterQuality;
+  threats: ClusterThreat[];
 }
 
 export interface SimilarThreat {
-  id: string;
+  threat_id: string;
   title: string;
   similarity: number;
   assessment_id?: string;
 }
 
 export interface SimilarThreatsResponse {
-  threat_id: string;
+  target_threat_id: string;
+  target_title?: string;
   similar_threats: SimilarThreat[];
 }

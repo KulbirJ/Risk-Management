@@ -5,7 +5,7 @@ import { Boxes, RefreshCw, Search, ChevronDown, ChevronRight, Layers, Crosshair 
 import { Button } from './Button';
 import { LoadingSpinner } from './LoadingSpinner';
 import apiClient from '../lib/api-client';
-import type { ClusteringResponse, ClusterResult, SimilarThreatsResponse } from '../lib/types';
+import type { ClusteringResponse, ClusterThreat, SimilarThreatsResponse } from '../lib/types';
 
 interface ClusteringPanelProps {
   assessmentId: string;
@@ -94,86 +94,123 @@ export function ClusteringPanel({ assessmentId }: ClusteringPanelProps) {
           <div className="grid grid-cols-4 gap-4 mb-4">
             <div className="p-3 bg-gray-50 rounded-lg text-center">
               <p className="text-xs text-gray-500 mb-1">Clusters</p>
-              <p className="text-lg font-bold text-gray-900">{clusters.clusters?.length || 0}</p>
+              <p className="text-lg font-bold text-gray-900">{clusters.clusters_found}</p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg text-center">
               <p className="text-xs text-gray-500 mb-1">Total Threats</p>
-              <p className="text-lg font-bold text-gray-900">{clusters.total_threats || 0}</p>
+              <p className="text-lg font-bold text-gray-900">{clusters.quality?.n_threats || 0}</p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg text-center">
-              <p className="text-xs text-gray-500 mb-1">Noise Points</p>
-              <p className="text-lg font-bold text-amber-600">{clusters.noise || 0}</p>
+              <p className="text-xs text-gray-500 mb-1">Outliers</p>
+              <p className="text-lg font-bold text-amber-600">{clusters.quality?.n_outliers || 0}</p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg text-center">
-              <p className="text-xs text-gray-500 mb-1">Quality</p>
-              <p className="text-lg font-bold text-green-600">
-                {clusters.quality !== undefined ? `${(clusters.quality * 100).toFixed(0)}%` : 'N/A'}
+              <p className="text-xs text-gray-500 mb-1">Scope</p>
+              <p className="text-lg font-bold text-green-600 capitalize">
+                {clusters.scope || 'N/A'}
               </p>
             </div>
           </div>
 
-          {/* Cluster list */}
-          {clusters.clusters && clusters.clusters.length > 0 ? (
-            <div className="space-y-3">
-              {clusters.clusters.map((cluster, idx) => (
-                <div
-                  key={cluster.cluster_id}
-                  className={`rounded-lg border p-4 ${CLUSTER_COLORS[idx % CLUSTER_COLORS.length]}`}
-                >
-                  <button
-                    onClick={() => setExpandedCluster(expandedCluster === cluster.cluster_id ? null : cluster.cluster_id)}
-                    className="w-full flex items-center justify-between"
+          {/* Cluster list — group threats by cluster_id */}
+          {(() => {
+            const grouped = new Map<number, ClusterThreat[]>();
+            const outliers: ClusterThreat[] = [];
+            (clusters.threats || []).forEach((t) => {
+              if (t.is_outlier) {
+                outliers.push(t);
+              } else {
+                const existing = grouped.get(t.cluster_id) || [];
+                existing.push(t);
+                grouped.set(t.cluster_id, existing);
+              }
+            });
+            const clusterEntries = Array.from(grouped.entries()).sort(([a], [b]) => a - b);
+
+            return clusterEntries.length > 0 ? (
+              <div className="space-y-3">
+                {clusterEntries.map(([clusterId, threats], idx) => (
+                  <div
+                    key={clusterId}
+                    className={`rounded-lg border p-4 ${CLUSTER_COLORS[idx % CLUSTER_COLORS.length]}`}
                   >
-                    <div className="flex items-center gap-2">
-                      <Layers className="w-4 h-4" />
-                      <span className="text-sm font-semibold">
-                        Cluster {cluster.cluster_id + 1}
-                        {cluster.label && ` - ${cluster.label}`}
-                      </span>
-                      <span className="text-xs opacity-70">
-                        ({cluster.threats.length} threat{cluster.threats.length !== 1 ? 's' : ''})
-                      </span>
-                    </div>
-                    {expandedCluster === cluster.cluster_id ? (
-                      <ChevronDown className="w-4 h-4" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4" />
-                    )}
-                  </button>
-                  {expandedCluster === cluster.cluster_id && (
-                    <div className="mt-3 space-y-1.5">
-                      {cluster.threats.map((t) => (
-                        <div
-                          key={t.id}
-                          className="flex items-center justify-between p-2 bg-white/60 rounded border border-white/80"
-                        >
-                          <span className="text-sm text-gray-800 truncate flex-1">
-                            {t.title || t.id.slice(0, 12)}
-                          </span>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {t.similarity !== undefined && (
-                              <span className="text-xs text-gray-500">{(t.similarity * 100).toFixed(0)}% similar</span>
-                            )}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleFindSimilar(t.id); }}
-                              className="p-1 hover:bg-white rounded text-gray-500 hover:text-blue-600 transition"
-                              title="Find similar threats"
-                            >
-                              <Crosshair className="w-3.5 h-3.5" />
-                            </button>
+                    <button
+                      onClick={() => setExpandedCluster(expandedCluster === clusterId ? null : clusterId)}
+                      className="w-full flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Layers className="w-4 h-4" />
+                        <span className="text-sm font-semibold">
+                          Cluster {clusterId + 1}
+                        </span>
+                        <span className="text-xs opacity-70">
+                          ({threats.length} threat{threats.length !== 1 ? 's' : ''})
+                        </span>
+                      </div>
+                      {expandedCluster === clusterId ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                    </button>
+                    {expandedCluster === clusterId && (
+                      <div className="mt-3 space-y-1.5">
+                        {threats.map((t) => (
+                          <div
+                            key={t.threat_id}
+                            className="flex items-center justify-between p-2 bg-white/60 rounded border border-white/80"
+                          >
+                            <span className="text-sm text-gray-800 truncate flex-1">
+                              {t.title || t.threat_id.slice(0, 12)}
+                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {t.likelihood_score !== undefined && (
+                                <span className="text-xs text-gray-500">Score: {t.likelihood_score}</span>
+                              )}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleFindSimilar(t.threat_id); }}
+                                className="p-1 hover:bg-white rounded text-gray-500 hover:text-blue-600 transition"
+                                title="Find similar threats"
+                              >
+                                <Crosshair className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {outliers.length > 0 && (
+                  <div className="rounded-lg border p-4 bg-gray-100 border-gray-300 text-gray-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Layers className="w-4 h-4" />
+                      <span className="text-sm font-semibold">Outliers</span>
+                      <span className="text-xs opacity-70">({outliers.length} threat{outliers.length !== 1 ? 's' : ''})</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {outliers.map((t) => (
+                        <div key={t.threat_id} className="flex items-center justify-between p-2 bg-white/60 rounded border border-white/80">
+                          <span className="text-sm text-gray-800 truncate flex-1">{t.title || t.threat_id.slice(0, 12)}</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleFindSimilar(t.threat_id); }}
+                            className="p-1 hover:bg-white rounded text-gray-500 hover:text-blue-600 transition"
+                            title="Find similar threats"
+                          >
+                            <Crosshair className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500 text-center py-8">
-              No clusters formed. Try enriching more threats or adjusting parameters.
-            </p>
-          )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-8">
+                No clusters formed. Try enriching more threats or adjusting parameters.
+              </p>
+            );
+          })()}
 
           {/* Similar threats result */}
           {similarResults && (
@@ -187,8 +224,8 @@ export function ClusteringPanel({ assessmentId }: ClusteringPanelProps) {
               ) : (
                 <div className="space-y-1.5">
                   {similarResults.similar_threats.map((s) => (
-                    <div key={s.id} className="flex items-center justify-between p-2 bg-white rounded border border-blue-100">
-                      <span className="text-sm text-gray-800 truncate flex-1">{s.title || s.id.slice(0, 12)}</span>
+                    <div key={s.threat_id} className="flex items-center justify-between p-2 bg-white rounded border border-blue-100">
+                      <span className="text-sm text-gray-800 truncate flex-1">{s.title || s.threat_id.slice(0, 12)}</span>
                       <div className="flex items-center gap-2 shrink-0">
                         <div className="w-16 bg-gray-200 rounded-full h-1.5">
                           <div

@@ -158,16 +158,16 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
           </div>
           <div className="p-3 bg-gray-50 rounded-lg text-center">
             <p className="text-xs text-gray-500 mb-1">Features</p>
-            <p className="text-sm font-bold text-gray-900">{modelInfo.features}</p>
+            <p className="text-sm font-bold text-gray-900">{modelInfo.feature_count}</p>
           </div>
           <div className="p-3 bg-gray-50 rounded-lg text-center">
             <p className="text-xs text-gray-500 mb-1">Algorithm</p>
-            <p className="text-sm font-bold text-gray-900">{modelInfo.algorithm || modelInfo.model_type || 'N/A'}</p>
+            <p className="text-sm font-bold text-gray-900">{modelInfo.algorithm || 'N/A'}</p>
           </div>
           <div className="p-3 bg-gray-50 rounded-lg text-center">
-            <p className="text-xs text-gray-500 mb-1">Accuracy</p>
+            <p className="text-xs text-gray-500 mb-1">Samples</p>
             <p className="text-sm font-bold text-gray-900">
-              {modelInfo.accuracy ? `${(modelInfo.accuracy * 100).toFixed(1)}%` : 'N/A'}
+              {modelInfo.training_samples || 'N/A'}
             </p>
           </div>
         </div>
@@ -266,17 +266,17 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
             ) : biasReport ? (
               <div className="space-y-2">
                 <p className="text-sm text-gray-600">
-                  {biasReport.total_scored} threats scored across {biasReport.sector_count} sector{biasReport.sector_count !== 1 ? 's' : ''}
+                  {biasReport.total_threats} threats scored across {Object.keys(biasReport.sectors).length} sector{Object.keys(biasReport.sectors).length !== 1 ? 's' : ''}
                 </p>
-                {biasReport.sectors && biasReport.sectors.length > 0 && (
+                {Object.keys(biasReport.sectors).length > 0 && (
                   <div className="space-y-1">
-                    {biasReport.sectors.map((s) => (
-                      <div key={s.sector} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                        <span className="font-medium">{s.sector}</span>
+                    {Object.entries(biasReport.sectors).map(([sectorName, s]) => (
+                      <div key={sectorName} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
+                        <span className="font-medium capitalize">{sectorName}</span>
                         <div className="flex items-center gap-4 text-xs text-gray-600">
                           <span>n={s.count}</span>
-                          <span>avg={s.avg_score.toFixed(1)}</span>
-                          <span>std={s.std_dev.toFixed(2)}</span>
+                          <span>mean={s.mean.toFixed(1)}</span>
+                          <span>std={s.std.toFixed(2)}</span>
                         </div>
                       </div>
                     ))}
@@ -304,27 +304,27 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
               <LoadingSpinner />
             ) : survivalCurve ? (
               <div>
-                {survivalCurve.median_days && (
+                {survivalCurve.median_survival_days && (
                   <p className="text-sm text-gray-700 mb-2">
-                    Median risk persistence: <strong>{survivalCurve.median_days} days</strong>
+                    Median risk persistence: <strong>{survivalCurve.median_survival_days} days</strong>
                   </p>
                 )}
-                {survivalCurve.curve_points.length > 0 ? (
+                {survivalCurve.timeline_days && survivalCurve.timeline_days.length > 0 ? (
                   <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-xs text-gray-500 mb-2">Survival Curve (probability risk remains open over time)</p>
                     <div className="flex items-end gap-1 h-24">
-                      {survivalCurve.curve_points.slice(0, 20).map((point, i) => (
+                      {survivalCurve.timeline_days.slice(0, 20).map((day, i) => (
                         <div
                           key={i}
                           className="flex-1 bg-indigo-400 rounded-t"
-                          style={{ height: `${point.probability * 100}%` }}
-                          title={`Day ${point.time_days}: ${(point.probability * 100).toFixed(0)}%`}
+                          style={{ height: `${(survivalCurve.survival_probability[i] || 0) * 100}%` }}
+                          title={`Day ${day}: ${((survivalCurve.survival_probability[i] || 0) * 100).toFixed(0)}%`}
                         />
                       ))}
                     </div>
                     <div className="flex justify-between text-xs text-gray-400 mt-1">
                       <span>Day 0</span>
-                      <span>Day {survivalCurve.curve_points[survivalCurve.curve_points.length - 1]?.time_days || '?'}</span>
+                      <span>Day {survivalCurve.timeline_days[survivalCurve.timeline_days.length - 1] || '?'}</span>
                     </div>
                   </div>
                 ) : (
@@ -350,9 +350,9 @@ export function MLScoreBadge({ threatId }: { threatId: string }) {
     apiClient.explainThreatScore(threatId).then(setExplanation).catch(() => {});
   }, [threatId]);
 
-  if (!explanation || explanation.score === undefined) return null;
+  if (!explanation || explanation.likelihood_score === undefined) return null;
 
-  const score = explanation.score;
+  const score = explanation.likelihood_score;
 
   return (
     <div className="relative inline-flex">
@@ -368,14 +368,14 @@ export function MLScoreBadge({ threatId }: { threatId: string }) {
         <TrendingUp className="w-3 h-3" />
         ML: {score.toFixed(0)}
       </button>
-      {showDetails && explanation.top_factors && (
+      {showDetails && explanation.components && explanation.components.length > 0 && (
         <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50" onClick={(e) => e.stopPropagation()}>
-          <p className="text-xs font-semibold text-gray-700 mb-2">Top Contributing Factors</p>
-          {explanation.top_factors.slice(0, 5).map((f, i) => (
+          <p className="text-xs font-semibold text-gray-700 mb-2">Score Breakdown ({explanation.total_points.toFixed(1)}/{explanation.max_possible})</p>
+          {explanation.components.slice(0, 5).map((c, i) => (
             <div key={i} className="flex items-center justify-between text-xs py-0.5">
-              <span className="text-gray-600">{f.feature}</span>
-              <span className={f.direction === 'positive' ? 'text-red-600' : 'text-green-600'}>
-                {f.direction === 'positive' ? '+' : '-'}{(f.contribution * 100).toFixed(1)}%
+              <span className="text-gray-600">{c.feature}</span>
+              <span className={c.points > 0 ? 'text-red-600' : 'text-gray-400'}>
+                +{c.points.toFixed(1)}/{c.max}
               </span>
             </div>
           ))}
