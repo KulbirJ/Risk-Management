@@ -420,7 +420,7 @@ def create_app() -> FastAPI:
             return {"status": "error", "message": str(e)}
 
     # Include API routers
-    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack, intel, ml, graph, clusters
+    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack, intel
     
     app.include_router(
         assessments.router,
@@ -467,21 +467,28 @@ def create_app() -> FastAPI:
         prefix="/api/v1/intel",
         tags=["intel"]
     )
-    app.include_router(
-        ml.router,
-        prefix="/api/v1/ml",
-        tags=["ml"]
-    )
-    app.include_router(
-        graph.router,
-        prefix="/api/v1/graph",
-        tags=["graph"]
-    )
-    app.include_router(
-        clusters.router,
-        prefix="/api/v1/clusters",
-        tags=["clusters"]
-    )
+
+    # ML routers — only loaded when numpy/scikit-learn/networkx are available
+    try:
+        from .api import ml, graph, clusters
+        app.include_router(
+            ml.router,
+            prefix="/api/v1/ml",
+            tags=["ml"]
+        )
+        app.include_router(
+            graph.router,
+            prefix="/api/v1/graph",
+            tags=["graph"]
+        )
+        app.include_router(
+            clusters.router,
+            prefix="/api/v1/clusters",
+            tags=["clusters"]
+        )
+        logger.info("ML/Graph/Cluster routers loaded successfully")
+    except ImportError as e:
+        logger.warning(f"ML routers not loaded (missing dependencies): {e}")
     
     # Future routers (Phase 2+)
     # from .api import threat_catalogue

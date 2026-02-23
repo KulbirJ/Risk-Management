@@ -21,8 +21,12 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-import numpy as np  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session
+
+try:
+    import numpy as np  # type: ignore[import-untyped]
+except ImportError:
+    np = None  # type: ignore[assignment]
 
 from ...models.models import Assessment, Threat
 from ..ml.scoring_service import FEATURE_KEYS, _features_to_array
