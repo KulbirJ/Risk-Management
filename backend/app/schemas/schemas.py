@@ -551,3 +551,152 @@ class AttackGroupRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ─────────────────────────────────────────────────────────────────
+# ML Scoring Schemas (Phase 2)
+# ─────────────────────────────────────────────────────────────────
+
+class MLScoreResult(BaseModel):
+    """ML scoring result for a single threat."""
+    threat_id: UUID
+    ml_likelihood_score: int
+    ml_likelihood_label: str  # low, medium, high, critical
+    explanation: Optional[dict] = None
+    model_info: Optional[dict] = None
+
+
+class MLBatchScoreResult(BaseModel):
+    """Batch scoring summary."""
+    scored: int
+    skipped_locked: int
+    skipped_no_features: int
+    total: int
+    results: List[dict] = []
+
+
+class MLModelInfo(BaseModel):
+    """Model metadata."""
+    trained: bool
+    algorithm: str
+    trained_at: Optional[str] = None
+    training_samples: int = 0
+    feature_count: int = 0
+    feature_keys: List[str] = []
+    metrics: Optional[dict] = None
+
+
+class MLExplanation(BaseModel):
+    """Feature-level explanation for a threat's score."""
+    threat_id: UUID
+    threat_title: str
+    likelihood_score: int
+    method: str  # model_feature_importance or rule_based_decomposition
+    top_factors: Optional[List[dict]] = None
+    components: Optional[List[dict]] = None
+    all_factors: Optional[List[dict]] = None
+    model_algorithm: Optional[str] = None
+
+
+class BiasReport(BaseModel):
+    """Sector-level score distribution report."""
+    sectors: dict = {}
+    total_threats: int = 0
+    generated_at: Optional[str] = None
+
+
+# ─────────────────────────────────────────────────────────────────
+# Survival Analysis Schemas (Phase 2)
+# ─────────────────────────────────────────────────────────────────
+
+class SurvivalEstimateResult(BaseModel):
+    """Persistence estimate for an active risk."""
+    active_risk_id: UUID
+    threat_id: UUID
+    estimated_persistence_days: int
+    sector: str
+    residual_risk: str
+
+
+class SurvivalCurve(BaseModel):
+    """Survival curve data."""
+    method: str
+    sector: Optional[str] = None
+    median_survival_days: Optional[float] = None
+    timeline_days: List[float] = []
+    survival_probability: List[float] = []
+    n_observations: int = 0
+    n_events: int = 0
+
+
+# ─────────────────────────────────────────────────────────────────
+# Graph Schemas (Phase 3)
+# ─────────────────────────────────────────────────────────────────
+
+class GraphNode(BaseModel):
+    """A node in the threat knowledge graph."""
+    id: str
+    type: str  # threat, technique, tactic, group, cve
+    label: str
+    pagerank: float = 0.0
+    betweenness: float = 0.0
+    degree: float = 0.0
+
+
+class GraphEdge(BaseModel):
+    """An edge in the threat knowledge graph."""
+    source: str
+    target: str
+    type: str  # uses_technique, belongs_to_tactic, has_cve
+
+
+class AssessmentGraph(BaseModel):
+    """Full knowledge graph for an assessment."""
+    assessment_id: str
+    nodes: List[dict] = []
+    edges: List[dict] = []
+    pagerank: dict = {}
+    stats: dict = {}
+
+
+class CriticalNode(BaseModel):
+    """A node identified as critical by PageRank + betweenness."""
+    id: str
+    type: str
+    label: str
+    composite_score: float
+    pagerank: float
+    betweenness: float
+
+
+# ─────────────────────────────────────────────────────────────────
+# Clustering Schemas (Phase 4)
+# ─────────────────────────────────────────────────────────────────
+
+class ThreatCluster(BaseModel):
+    """A cluster of similar threats."""
+    cluster_id: int
+    label: str
+    size: int
+    avg_likelihood_score: float
+    dominant_features: List[dict] = []
+    members: List[dict] = []
+
+
+class ClusterResult(BaseModel):
+    """Assessment clustering result."""
+    assessment_id: Optional[str] = None
+    clusters: List[dict] = []
+    outliers: List[dict] = []
+    quality: dict = {}
+    threats: List[dict] = []
+    parameters: Optional[dict] = None
+
+
+class SimilarThreat(BaseModel):
+    """A threat similar to a target threat."""
+    threat_id: UUID
+    title: str
+    assessment_id: UUID
+    likelihood_score: int
+    similarity: float

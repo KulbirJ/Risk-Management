@@ -420,7 +420,7 @@ def create_app() -> FastAPI:
             return {"status": "error", "message": str(e)}
 
     # Include API routers
-    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack, intel
+    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack, intel, ml, graph, clusters
     
     app.include_router(
         assessments.router,
@@ -466,6 +466,21 @@ def create_app() -> FastAPI:
         intel.router,
         prefix="/api/v1/intel",
         tags=["intel"]
+    )
+    app.include_router(
+        ml.router,
+        prefix="/api/v1/ml",
+        tags=["ml"]
+    )
+    app.include_router(
+        graph.router,
+        prefix="/api/v1/graph",
+        tags=["graph"]
+    )
+    app.include_router(
+        clusters.router,
+        prefix="/api/v1/clusters",
+        tags=["clusters"]
     )
     
     # Future routers (Phase 2+)
