@@ -85,14 +85,63 @@ jobs:
           aws lambda wait function-updated \
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }}
-      
+
+      - name: Build and publish ML Lambda Layer
+        run: |
+          echo "Building ML Lambda Layer (numpy, scikit-learn, networkx)..."
+          mkdir -p ml-layer/python
+
+          # Install ML packages compiled for Lambda's manylinux2014_x86_64 runtime
+          pip install \
+            --platform manylinux2014_x86_64 \
+            --only-binary=:all: \
+            --target ./ml-layer/python \
+            "numpy>=1.26.0,<2.0" \
+            "scikit-learn>=1.4.0" \
+            "networkx>=3.2.0"
+
+          # Slim the layer: remove tests, docs, pyc files, strip .so symbols
+          find ./ml-layer/python -type d -name 'tests'       -exec rm -rf {} + 2>/dev/null || true
+          find ./ml-layer/python -type d -name 'test'        -exec rm -rf {} + 2>/dev/null || true
+          find ./ml-layer/python -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+          find ./ml-layer/python -name '*.pyc'  -delete
+          find ./ml-layer/python -name '*.pyo'  -delete
+          find ./ml-layer/python -name '*.dist-info' -type d -exec rm -rf {} + 2>/dev/null || true
+          find ./ml-layer/python -name '*.so' -exec strip --strip-unneeded {} + 2>/dev/null || true
+          # Remove large extras we don't need
+          rm -rf ./ml-layer/python/numpy/core/tests 2>/dev/null || true
+          rm -rf ./ml-layer/python/sklearn/datasets  2>/dev/null || true
+
+          echo "Layer size before zip: $(du -sh ml-layer/python | cut -f1)"
+          cd ml-layer && zip -r ../ml-layer.zip python/ -x '*.pyc' -x '__pycache__/*'
+          echo "Layer zip size: $(du -sh ../ml-layer.zip | cut -f1)"
+
+          # Upload layer zip to S3
+          S3_BUCKET="compliance-platform-evidence-dev"
+          S3_KEY="lambda-layers/ml-layer-${{ github.sha }}.zip"
+          aws s3 cp ../ml-layer.zip "s3://${S3_BUCKET}/${S3_KEY}" --region ${{ env.AWS_REGION }}
+
+          # Publish new layer version
+          ML_LAYER_ARN=$(aws lambda publish-layer-version \
+            --layer-name "compliance-platform-ml-deps" \
+            --description "numpy + scikit-learn + networkx (commit ${{ github.sha }})" \
+            --content S3Bucket="${S3_BUCKET}",S3Key="${S3_KEY}" \
+            --compatible-runtimes python3.11 \
+            --region ${{ env.AWS_REGION }} \
+            --query "LayerVersionArn" \
+            --output text)
+
+          echo "Published ML Layer ARN: ${ML_LAYER_ARN}"
+          echo "ML_LAYER_ARN=${ML_LAYER_ARN}" >> $GITHUB_ENV
+
       - name: Update Lambda handler configuration
         run: |
-          echo "Setting Lambda handler to app.main.lambda_handler and runtime to python3.11..."
+          echo "Setting Lambda handler, runtime, and attaching ML layer..."
           aws lambda update-function-configuration \
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
             --handler app.main.lambda_handler \
             --runtime python3.11 \
+            --layers "${{ env.ML_LAYER_ARN }}" \
             --region ${{ env.AWS_REGION }}
           
           echo "Waiting for configuration update..."
@@ -136,7 +185,8 @@ jobs:
       - name: Deployment Summary
         run: |
           echo "✅ Lambda deployment completed successfully!"
-          echo "Function: ${{ env.LAMBDA_FUNCTION_NAME }}"
-          echo "Region: ${{ env.AWS_REGION }}"
-          echo "Commit: ${{ github.sha }}"
-          echo "Deployed at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Function:  ${{ env.LAMBDA_FUNCTION_NAME }}"
+          echo "Region:    ${{ env.AWS_REGION }}"
+          echo "Commit:    ${{ github.sha }}"
+          echo "ML Layer:  ${{ env.ML_LAYER_ARN }}"
+          echo "Deployed:  $(date -u +%Y-%m-%dT%H:%M:%SZ)"
