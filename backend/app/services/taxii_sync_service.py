@@ -22,7 +22,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ..core.config import settings
 from ..models.models import (
-    AttackTactic, AttackTechnique, AttackSyncStatus,
+    AttackTactic, AttackTechnique, AttackSyncStatus, AttackGroup,
     ATTACK_TACTIC_ORDER,
 )
 
@@ -46,7 +46,7 @@ class TaxiiSyncService:
         Full sync: fetch ATT&CK data, upsert into DB, return stats.
 
         Returns a dict:
-          {status, tactics_count, techniques_count, error_message}
+          {status, tactics_count, techniques_count, groups_count, error_message}
         """
         status_record = self._get_or_create_sync_status(db)
         status_record.sync_status = "running"
@@ -60,6 +60,7 @@ class TaxiiSyncService:
 
             tactics_map = self._upsert_tactics(db, objects)
             techniques_count = self._upsert_techniques(db, objects, tactics_map)
+            groups_count = self._upsert_groups(db, objects)
 
             status_record.sync_status = "completed"
             status_record.last_synced_at = datetime.now(timezone.utc)
@@ -70,12 +71,13 @@ class TaxiiSyncService:
 
             logger.info(
                 f"ATT&CK sync completed: {len(tactics_map)} tactics, "
-                f"{techniques_count} techniques"
+                f"{techniques_count} techniques, {groups_count} groups"
             )
             return {
                 "status": "completed",
                 "tactics_count": len(tactics_map),
                 "techniques_count": techniques_count,
+                "groups_count": groups_count,
             }
 
         except Exception as exc:
@@ -90,6 +92,7 @@ class TaxiiSyncService:
                 "status": "failed",
                 "tactics_count": 0,
                 "techniques_count": 0,
+                "groups_count": 0,
                 "error_message": str(exc),
             }
 
@@ -350,6 +353,116 @@ class TaxiiSyncService:
             db.add(technique)
             db.flush()
             return technique
+
+    # ------------------------------------------------------------------
+    # Groups upsert
+    # ------------------------------------------------------------------
+
+    def _upsert_groups(
+        self,
+        db: Session,
+        objects: List[Dict[str, Any]],
+    ) -> int:
+        """
+        Parse intrusion-set objects and their technique relationships,
+        then upsert into attack_groups table.
+        Returns total number of groups upserted.
+        """
+        now = datetime.now(timezone.utc)
+
+        # Build group stix_id → list of technique stix_ids from relationship objects
+        group_techniques: Dict[str, List[str]] = {}
+        for obj in objects:
+            if (
+                obj.get("type") == "relationship"
+                and obj.get("relationship_type") == "uses"
+                and not obj.get("x_mitre_deprecated")
+                and not obj.get("revoked")
+            ):
+                src = obj.get("source_ref", "")
+                tgt = obj.get("target_ref", "")
+                if src.startswith("intrusion-set--") and tgt.startswith("attack-pattern--"):
+                    group_techniques.setdefault(src, []).append(tgt)
+
+        # Build existing stix_id → AttackGroup map
+        existing_by_stix: Dict[str, AttackGroup] = {
+            g.stix_id: g for g in db.query(AttackGroup).all()
+        }
+
+        count = 0
+        for obj in objects:
+            if (
+                obj.get("type") != "intrusion-set"
+                or obj.get("x_mitre_deprecated")
+                or obj.get("revoked")
+            ):
+                continue
+
+            stix_id: str = obj.get("id", "")
+            name: str = obj.get("name", "")
+            if not stix_id or not name:
+                continue
+
+            # Aliases: MITRE stores them directly on the object
+            raw_aliases: List[str] = obj.get("aliases", []) or []
+            # Remove the group name itself from aliases list
+            aliases = [a for a in raw_aliases if a != name]
+
+            description: str = obj.get("description", "") or ""
+
+            # URL from external references
+            url = ""
+            for ref in obj.get("external_references", []):
+                if ref.get("source_name") == "mitre-attack":
+                    url = ref.get("url", "")
+                    break
+
+            # Dates – MITRE uses ISO strings like "2017-05-31T21:31:48.197Z"
+            first_seen: Optional[str] = obj.get("created", "")[:10] or None
+            last_seen: Optional[str] = obj.get("modified", "")[:10] or None
+
+            # Technique STIX IDs this group uses
+            technique_ids: List[str] = group_techniques.get(stix_id, [])
+
+            # Target sectors — MITRE STIX doesn't have a standard field for this.
+            # Use x_mitre_domains / empty list (can be enriched via OTX later).
+            target_sectors: List[str] = []
+
+            existing = existing_by_stix.get(stix_id)
+            if existing:
+                existing.name = name
+                existing.aliases = aliases
+                existing.description = description[:2000] if description else None
+                existing.technique_ids = technique_ids
+                existing.target_sectors = target_sectors
+                existing.first_seen = first_seen
+                existing.last_seen = last_seen
+                existing.url = url
+                existing.last_synced_at = now
+            else:
+                group = AttackGroup(
+                    stix_id=stix_id,
+                    name=name,
+                    aliases=aliases,
+                    description=description[:2000] if description else None,
+                    technique_ids=technique_ids,
+                    target_sectors=target_sectors,
+                    first_seen=first_seen,
+                    last_seen=last_seen,
+                    url=url,
+                    last_synced_at=now,
+                )
+                db.add(group)
+            count += 1
+
+        try:
+            db.commit()
+        except SQLAlchemyError as exc:
+            db.rollback()
+            raise exc
+
+        logger.info(f"Upserted {count} ATT&CK groups")
+        return count
 
     # ------------------------------------------------------------------
     # Utility helpers
