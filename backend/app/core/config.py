@@ -97,6 +97,18 @@ class Settings(BaseSettings):
     attack_max_techniques_per_prompt: int = 60 # Limit techniques sent to Bedrock per call
     attack_sync_enabled: bool = True
 
+    # ─── Threat Intelligence Enrichment (Phase 1) ───
+    intel_cache_ttl_hours: int = 24            # Default cache TTL for enrichment data
+    nvd_api_base: str = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+    nvd_api_key: Optional[str] = None          # Optional NVD API key for higher rate limits
+    cisa_kev_url: str = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+    otx_api_base: str = "https://otx.alienvault.com/api/v1"
+    otx_api_key: Optional[str] = None          # AlienVault OTX API key
+    github_exploit_search_url: str = "https://api.github.com/search/repositories"
+    github_pat: Optional[str] = None           # GitHub Personal Access Token for search API
+    intel_s3_bucket: Optional[str] = None      # S3 bucket for caching large intel payloads
+    sector_threat_frequency_path: str = "app/data/sector_threat_frequency.json"  # Static reference data
+
     class Config:
         env_file = ".env"
         case_sensitive = False

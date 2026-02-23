@@ -52,6 +52,7 @@ class AssessmentBase(BaseModel):
     scope: Optional[str] = None
     tech_stack: Optional[List[str]] = []
     overall_impact: str = "Medium"
+    industry_sector: Optional[str] = None  # e.g., "finance", "healthcare", "government"
 
 
 class AssessmentCreate(AssessmentBase):
@@ -66,11 +67,13 @@ class AssessmentUpdate(BaseModel):
     tech_stack: Optional[List[str]] = None
     overall_impact: Optional[str] = None
     status: Optional[str] = None
+    industry_sector: Optional[str] = None
 
 
 class AssessmentRead(AssessmentBase):
     id: UUID
     status: str
+    industry_sector: Optional[str] = None
     owner_user_id: UUID
     created_at: datetime
     updated_at: datetime
@@ -114,6 +117,9 @@ class ThreatRead(ThreatBase):
     status: str
     cvss_score: Optional[str] = None
     detected_by: str
+    intel_enriched: bool = False
+    likelihood_score: int = 0
+    likelihood_score_rationale: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
 
@@ -210,6 +216,7 @@ class ActiveRiskCreate(ActiveRiskBase):
     threat_id: UUID
     risk_owner_id: UUID
     review_cycle_days: int = 30
+    score_locked: bool = False
 
 
 class ActiveRiskUpdate(BaseModel):
@@ -219,6 +226,7 @@ class ActiveRiskUpdate(BaseModel):
     status: Optional[str] = None
     risk_status: Optional[str] = None
     review_cycle_days: Optional[int] = None
+    score_locked: Optional[bool] = None
 
 
 class ActiveRiskRead(ActiveRiskBase):
@@ -227,6 +235,9 @@ class ActiveRiskRead(ActiveRiskBase):
     threat_id: UUID
     risk_owner_id: Optional[UUID] = None
     review_cycle_days: Optional[int] = 30
+    next_review_date: Optional[datetime] = None
+    estimated_persistence_days: Optional[int] = None
+    score_locked: bool = False
     status: str
     acceptance_date: Optional[datetime] = None
     detected_by: Optional[str] = None
@@ -467,6 +478,76 @@ class AttackSyncStatusRead(BaseModel):
     techniques_count: int = 0
     source_url: Optional[str] = None
     error_message: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ─────────────────────────────────────────────────────────────────
+# Threat Intelligence Enrichment Schemas (Phase 1)
+# ─────────────────────────────────────────────────────────────────
+
+class ThreatIntelEnrichmentRead(BaseModel):
+    """Read schema for a single enrichment record."""
+    id: UUID
+    threat_id: UUID
+    source: str          # nvd, cisa_kev, otx_cve, otx_technique, github_poc, sector_freq, attack_group
+    source_id: Optional[str] = None
+    raw_data: Optional[dict] = None
+    feature_vector: Optional[dict] = None
+    severity_score: Optional[int] = None
+    fetched_at: datetime
+    expires_at: Optional[datetime] = None
+    is_stale: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class ThreatEnrichRequest(BaseModel):
+    """Request to run dual-track enrichment on specific threats or a whole assessment."""
+    assessment_id: Optional[UUID] = None   # Enrich all threats in assessment
+    threat_ids: Optional[List[UUID]] = None  # Or specific threats
+    force_refresh: bool = False            # Ignore cache TTL
+
+
+class ThreatEnrichResponse(BaseModel):
+    """Response from the enrichment orchestrator."""
+    threats_enriched: int = 0
+    enrichments_created: int = 0
+    enrichments_updated: int = 0
+    errors: List[str] = []
+    feature_summary: Optional[dict] = None  # Aggregated feature stats
+
+
+class EnrichmentSummary(BaseModel):
+    """Combined enrichment summary for a single threat."""
+    threat_id: UUID
+    threat_title: str
+    intel_enriched: bool
+    likelihood_score: int
+    sources: List[str] = []                # Which feeds returned data
+    feature_vector: Optional[dict] = None  # Unified feature vector
+    cve_data: Optional[dict] = None        # NVD + KEV combined
+    otx_data: Optional[dict] = None        # OTX pulse data
+    exploit_data: Optional[dict] = None    # GitHub PoC data
+    sector_frequency: Optional[dict] = None  # Sector incident frequency
+    attack_groups: Optional[List[dict]] = None  # Related threat groups
+    enriched_at: Optional[datetime] = None
+
+
+class AttackGroupRead(BaseModel):
+    """Read schema for MITRE ATT&CK Groups."""
+    id: UUID
+    stix_id: str
+    name: str
+    aliases: List[str] = []
+    description: Optional[str] = None
+    technique_ids: List[str] = []
+    target_sectors: List[str] = []
+    first_seen: Optional[str] = None
+    last_seen: Optional[str] = None
+    url: Optional[str] = None
 
     class Config:
         from_attributes = True

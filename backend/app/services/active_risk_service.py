@@ -3,10 +3,12 @@ from uuid import UUID
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from ..models.models import ActiveRisk, Assessment, Threat, User
 from ..schemas.schemas import ActiveRiskCreate, ActiveRiskUpdate
+from .audit_log_service import AuditLogService
+from .audit_log_service import AuditLogService
 
 
 class ActiveRiskService:
@@ -67,6 +69,8 @@ class ActiveRiskService:
             risk_owner_id=risk_data.risk_owner_id,
             mitigation_plan=risk_data.mitigation_plan,
             review_cycle_days=risk_data.review_cycle_days,
+            next_review_date=datetime.utcnow() + timedelta(days=risk_data.review_cycle_days),
+            score_locked=getattr(risk_data, 'score_locked', False),
             status="open"
         )
         
@@ -74,6 +78,22 @@ class ActiveRiskService:
             db.add(active_risk)
             db.commit()
             db.refresh(active_risk)
+
+            # Audit log
+            try:
+                AuditLogService.create_audit_log(
+                    db=db,
+                    tenant_id=tenant_id,
+                    actor_user_id=risk_data.risk_owner_id,
+                    action="active_risk.create",
+                    entity_type="ActiveRisk",
+                    entity_id=active_risk.id,
+                    new_value={"title": active_risk.title, "threat_id": str(risk_data.threat_id),
+                               "residual_risk": active_risk.residual_risk}
+                )
+            except Exception:
+                pass  # Audit failure should not block the operation
+
             return active_risk
         except SQLAlchemyError as e:
             db.rollback()
@@ -133,8 +153,13 @@ class ActiveRiskService:
 
         # Update fields
         update_dict = update_data.model_dump(exclude_unset=True)
+        old_values = {k: getattr(active_risk, k, None) for k in update_dict}
         for field, value in update_dict.items():
             setattr(active_risk, field, value)
+        
+        # Recompute next_review_date if review_cycle_days changed
+        if 'review_cycle_days' in update_dict:
+            active_risk.next_review_date = datetime.utcnow() + timedelta(days=update_dict['review_cycle_days'])
         
         # Set acceptance date when status changes to 'accepted'
         if 'status' in update_dict and update_dict['status'] == 'accepted':
@@ -146,6 +171,22 @@ class ActiveRiskService:
         try:
             db.commit()
             db.refresh(active_risk)
+
+            # Audit log
+            try:
+                AuditLogService.create_audit_log(
+                    db=db,
+                    tenant_id=tenant_id,
+                    actor_user_id=active_risk.risk_owner_id,
+                    action="active_risk.update",
+                    entity_type="ActiveRisk",
+                    entity_id=risk_id,
+                    old_value={k: str(v) if v else None for k, v in old_values.items()},
+                    new_value={k: str(v) if v else None for k, v in update_dict.items()}
+                )
+            except Exception:
+                pass  # Audit failure should not block the operation
+
             return active_risk
         except SQLAlchemyError as e:
             db.rollback()
@@ -167,8 +208,26 @@ class ActiveRiskService:
             return False
 
         try:
+            risk_id_str = str(active_risk.id)
+            risk_title = active_risk.title
+            risk_owner = active_risk.risk_owner_id
             db.delete(active_risk)
             db.commit()
+
+            # Audit log
+            try:
+                AuditLogService.create_audit_log(
+                    db=db,
+                    tenant_id=tenant_id,
+                    actor_user_id=risk_owner,
+                    action="active_risk.delete",
+                    entity_type="ActiveRisk",
+                    entity_id=risk_id,
+                    old_value={"title": risk_title}
+                )
+            except Exception:
+                pass
+
             return True
         except SQLAlchemyError as e:
             db.rollback()

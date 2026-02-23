@@ -59,6 +59,7 @@ class Assessment(Base):
     tech_stack = Column(JSONB, default=[])  # ["Python", "PostgreSQL", "AWS"]
     overall_impact = Column(String(20), default="Medium")  # Low, Medium, High, Critical
     status = Column(String(20), default="draft")  # draft, in_review, completed, archived
+    industry_sector = Column(String(50), nullable=True)  # e.g., "finance", "healthcare", "government"
     owner_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -91,6 +92,8 @@ class Threat(Base):
     impact = Column(String(20), default="Medium")  # Low, Medium, High, Critical
     severity = Column(String(20), default="Medium")  # Low, Medium, High, Critical (computed)
     status = Column(String(20), default="identified")  # identified, in_review, at_risk, mitigated
+    intel_enriched = Column(Boolean, default=False)  # True when threat intel enrichment has run
+    likelihood_score_rationale = Column(JSONB, default={})  # Feature vector / explanation for likelihood_score
     ai_rationale = Column(Text, nullable=True)  # (future use for Phase 1 — AI explanation)
     created_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
@@ -179,6 +182,9 @@ class ActiveRisk(Base):
     mitigation_plan = Column(Text, nullable=True)
     acceptance_date = Column(DateTime(timezone=True), nullable=True)
     review_cycle_days = Column(Integer, default=30)
+    next_review_date = Column(DateTime(timezone=True), nullable=True)  # Computed: created_at + review_cycle_days
+    estimated_persistence_days = Column(Integer, nullable=True)  # Survival-analysis output
+    score_locked = Column(Boolean, default=False)  # When True, ML cannot override risk_score
     status = Column(String(50), default="open")  # open, accepted, mitigating, closed
     risk_status = Column(String(50), default="Planned")  # Planned, Ongoing, Delayed, Completed, Accepted
     detected_by = Column(String(50), default="manual")  # manual, ai_intelligence
@@ -400,3 +406,50 @@ class AttackSyncStatus(Base):
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+# ─────────────────────────────────────────────────────────────────
+# Threat Intelligence Enrichment Models (Phase 1)
+# ─────────────────────────────────────────────────────────────────
+
+class ThreatIntelEnrichment(Base):
+    """Cached enrichment data from external threat-intel feeds for a specific threat."""
+    __tablename__ = "threat_intel_enrichments"
+    __table_args__ = (
+        UniqueConstraint("threat_id", "source", name="uq_threat_enrichment_source"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    threat_id = Column(UUID(as_uuid=True), ForeignKey("threats.id"), nullable=False, index=True)
+    source = Column(String(50), nullable=False)  # nvd, cisa_kev, otx_cve, otx_technique, github_poc, sector_freq, attack_group
+    source_id = Column(String(255), nullable=True)  # CVE-2023-1234, T1566, etc.
+    raw_data = Column(JSONB, default={})  # Full API response or extracted payload
+    feature_vector = Column(JSONB, default={})  # Normalised numeric features for ML
+    severity_score = Column(Integer, nullable=True)  # 0-100 normalised severity
+    fetched_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)  # Cache TTL
+    is_stale = Column(Boolean, default=False)
+
+    # Relationships
+    threat = relationship("Threat", backref="intel_enrichments")
+
+
+class AttackGroup(Base):
+    """MITRE ATT&CK Intrusion Set / Threat Group (e.g., APT29, FIN7)."""
+    __tablename__ = "attack_groups"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    stix_id = Column(String(255), unique=True, nullable=False)       # intrusion-set--<uuid>
+    name = Column(String(255), nullable=False, index=True)           # e.g., "APT29"
+    aliases = Column(JSONB, default=[])                              # ["Cozy Bear", "The Dukes"]
+    description = Column(Text, nullable=True)
+    technique_ids = Column(JSONB, default=[])                        # List of ATT&CK technique STIX IDs used
+    target_sectors = Column(JSONB, default=[])                       # ["government", "finance", ...]
+    first_seen = Column(String(50), nullable=True)
+    last_seen = Column(String(50), nullable=True)
+    url = Column(String(512), nullable=True)
+    last_synced_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    # No FK to techniques — join via technique_ids JSONB array

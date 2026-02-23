@@ -114,6 +114,7 @@ def create_app() -> FastAPI:
             Recommendation, ActiveRisk, AuditLog, ThreatCatalogue, IntelligenceJob,
             AttackTactic, AttackTechnique, ThreatAttackMapping,
             KillChain, KillChainStage, AttackSyncStatus,
+            ThreatIntelEnrichment, AttackGroup,
         )
         
         db = SessionLocal()
@@ -151,6 +152,7 @@ def create_app() -> FastAPI:
                 ("assessments", "tech_stack", "JSONB DEFAULT '[]'"),
                 ("assessments", "overall_impact", "VARCHAR(20) DEFAULT 'Medium'"),
                 ("assessments", "status", "VARCHAR(20) DEFAULT 'draft'"),
+                ("assessments", "industry_sector", "VARCHAR(50)"),
                 ("assessments", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 ("assessments", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 
@@ -167,6 +169,8 @@ def create_app() -> FastAPI:
                 ("threats", "impact", "VARCHAR(20) DEFAULT 'Medium'"),
                 ("threats", "severity", "VARCHAR(20) DEFAULT 'Medium'"),
                 ("threats", "status", "VARCHAR(20) DEFAULT 'identified'"),
+                ("threats", "intel_enriched", "BOOLEAN DEFAULT FALSE"),
+                ("threats", "likelihood_score_rationale", "JSONB DEFAULT '{}'"),
                 ("threats", "ai_rationale", "TEXT"),
                 ("threats", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 ("threats", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
@@ -209,6 +213,9 @@ def create_app() -> FastAPI:
                 ("active_risks", "mitigation_plan", "TEXT"),
                 ("active_risks", "acceptance_date", "TIMESTAMP WITH TIME ZONE"),
                 ("active_risks", "review_cycle_days", "INTEGER DEFAULT 30"),
+                ("active_risks", "next_review_date", "TIMESTAMP WITH TIME ZONE"),
+                ("active_risks", "estimated_persistence_days", "INTEGER"),
+                ("active_risks", "score_locked", "BOOLEAN DEFAULT FALSE"),
                 ("active_risks", "status", "VARCHAR(50) DEFAULT 'open'"),
                 ("active_risks", "risk_status", "VARCHAR(50) DEFAULT 'Planned'"),
                 ("active_risks", "detected_by", "VARCHAR(50) DEFAULT 'manual'"),
@@ -313,6 +320,29 @@ def create_app() -> FastAPI:
                 ("attack_sync_status", "error_message", "TEXT"),
                 ("attack_sync_status", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 ("attack_sync_status", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ THREAT_INTEL_ENRICHMENTS TABLE (Phase 1) ============
+                ("threat_intel_enrichments", "source", "VARCHAR(50) NOT NULL"),
+                ("threat_intel_enrichments", "source_id", "VARCHAR(255)"),
+                ("threat_intel_enrichments", "raw_data", "JSONB DEFAULT '{}'"),
+                ("threat_intel_enrichments", "feature_vector", "JSONB DEFAULT '{}'"),
+                ("threat_intel_enrichments", "severity_score", "INTEGER"),
+                ("threat_intel_enrichments", "fetched_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                ("threat_intel_enrichments", "expires_at", "TIMESTAMP WITH TIME ZONE"),
+                ("threat_intel_enrichments", "is_stale", "BOOLEAN DEFAULT FALSE"),
+                
+                # ============ ATTACK_GROUPS TABLE (Phase 1) ============
+                ("attack_groups", "stix_id", "VARCHAR(255)"),
+                ("attack_groups", "name", "VARCHAR(255)"),
+                ("attack_groups", "aliases", "JSONB DEFAULT '[]'"),
+                ("attack_groups", "description", "TEXT"),
+                ("attack_groups", "technique_ids", "JSONB DEFAULT '[]'"),
+                ("attack_groups", "target_sectors", "JSONB DEFAULT '[]'"),
+                ("attack_groups", "first_seen", "VARCHAR(50)"),
+                ("attack_groups", "last_seen", "VARCHAR(50)"),
+                ("attack_groups", "url", "VARCHAR(512)"),
+                ("attack_groups", "last_synced_at", "TIMESTAMP WITH TIME ZONE"),
+                ("attack_groups", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
             ]
             
             for table_name, column_name, column_def in schema_updates:
@@ -390,7 +420,7 @@ def create_app() -> FastAPI:
             return {"status": "error", "message": str(e)}
 
     # Include API routers
-    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack
+    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack, intel
     
     app.include_router(
         assessments.router,
@@ -431,6 +461,11 @@ def create_app() -> FastAPI:
         attack.router,
         prefix="/api/v1/attack",
         tags=["attack"]
+    )
+    app.include_router(
+        intel.router,
+        prefix="/api/v1/intel",
+        tags=["intel"]
     )
     
     # Future routers (Phase 2+)
