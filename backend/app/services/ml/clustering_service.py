@@ -196,14 +196,14 @@ class ClusteringService:
                 "is_outlier": int(labels[i]) == -1,
             })
 
-        return {
+        return self._sanitize_numpy({
             "assessment_id": str(assessment_id),
             "clusters": list(clusters.values()),
             "outliers": outliers,
             "quality": quality,
             "threats": threat_assignments,
             "parameters": {"eps": eps, "min_samples": min_samples},
-        }
+        })
 
     # ══════════════════════════════════════════════════════════════
     # CROSS-ASSESSMENT CLUSTERING
@@ -284,13 +284,13 @@ class ClusteringService:
                 "is_outlier": int(labels[i]) == -1,
             })
 
-        return {
+        return self._sanitize_numpy({
             "scope": "tenant",
             "clusters_found": n_clusters,
             "quality": quality,
             "threats": threat_assignments,
             "parameters": {"eps": eps, "min_samples": min_samples},
-        }
+        })
 
     # ══════════════════════════════════════════════════════════════
     # SIMILARITY SEARCH
@@ -358,12 +358,12 @@ class ClusteringService:
 
         similarities.sort(key=lambda x: x["similarity"], reverse=True)
 
-        return {
+        return self._sanitize_numpy({
             "target_threat_id": str(threat_id),
             "target_title": target.title,
             "similar_threats": similarities[:top_n],
             "total_compared": len(similarities),
-        }
+        })
 
     # ══════════════════════════════════════════════════════════════
     # HELPERS
@@ -420,9 +420,28 @@ class ClusteringService:
             dist = float(np.linalg.norm(point - centroid))
             if dist < best_dist:
                 best_dist = dist
-                best_cluster = cl
+                best_cluster = int(cl)
 
         return best_cluster
+
+    @staticmethod
+    def _sanitize_numpy(obj: Any) -> Any:
+        """Recursively convert numpy types to Python native types for JSON serialization."""
+        if np is None:
+            return obj
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, dict):
+            return {k: ClusteringService._sanitize_numpy(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [ClusteringService._sanitize_numpy(v) for v in obj]
+        return obj
 
     @staticmethod
     def _empty_result(
