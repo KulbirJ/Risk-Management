@@ -576,10 +576,57 @@ try:
         api_gateway_base_path="/",  # API Gateway stage path
     )
 
+    def _handle_run_migrations(event):
+        """Run database schema migrations via direct Lambda invocation."""
+        import logging
+        import traceback
+        _logger = logging.getLogger(__name__)
+        _logger.info("[MIGRATE] Running schema migrations...")
+        try:
+            from sqlalchemy import text, inspect as sa_inspect
+            from .db.database import SessionLocal, engine, Base
+            from .models import models as _models  # noqa: F841 — ensure all models loaded
+
+            db = SessionLocal()
+            results = []
+            try:
+                Base.metadata.create_all(bind=engine)
+                results.append("Created any missing tables")
+
+                inspector = sa_inspect(engine)
+                # Comprehensive column list — mirrors /migrate-schema endpoint
+                schema_updates = [
+                    ("assessments", "industry_sector", "VARCHAR(50)"),
+                    ("threats", "intel_enriched", "BOOLEAN DEFAULT FALSE"),
+                    ("threats", "likelihood_score_rationale", "JSONB DEFAULT '{}'"),
+                    ("active_risks", "next_review_date", "TIMESTAMP WITH TIME ZONE"),
+                    ("active_risks", "estimated_persistence_days", "INTEGER"),
+                    ("active_risks", "score_locked", "BOOLEAN DEFAULT FALSE"),
+                ]
+                for table, column, col_type in schema_updates:
+                    existing = [c["name"] for c in inspector.get_columns(table)]
+                    if column not in existing:
+                        db.execute(text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS "{column}" {col_type}'))
+                        results.append(f"Added {table}.{column}")
+                db.commit()
+                results.append("Schema sync completed")
+            finally:
+                db.close()
+
+            _logger.info(f"[MIGRATE] Done: {results}")
+            return {"statusCode": 200, "body": "Migrations completed", "results": results}
+        except Exception as e:
+            _logger.error(f"[MIGRATE] FAILED: {e}\n{traceback.format_exc()}")
+            return {"statusCode": 500, "body": f"Migration failed: {e}"}
+
     def lambda_handler(event, context):
-        """Route Lambda events: async enrichment or API Gateway via Mangum."""
-        if isinstance(event, dict) and event.get("action") == "enrich_assessment":
-            return _handle_async_enrichment(event)
+        """Route Lambda events: migrations, async enrichment, or API Gateway via Mangum."""
+        if isinstance(event, dict):
+            action = event.get("action", "")
+            if action == "enrich_assessment":
+                return _handle_async_enrichment(event)
+            if action in ("run_migrations", "migrate"):
+                return _handle_run_migrations(event)
         return _mangum_handler(event, context)
 
 except ImportError:
