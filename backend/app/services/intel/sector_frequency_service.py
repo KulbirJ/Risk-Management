@@ -23,12 +23,17 @@ class SectorFrequencyService:
         if self._data is not None:
             return self._data
 
-        # Resolve path relative to backend root
-        path = settings.sector_threat_frequency_path
-        if not os.path.isabs(path):
-            # Try relative to the backend directory
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            path = os.path.join(base_dir, path)
+        # Resolve path relative to this file's location, which works in both
+        # local dev and Lambda (where CWD-relative paths fail).
+        # __file__ = .../backend/app/services/intel/sector_frequency_service.py
+        # data file = .../backend/app/data/sector_threat_frequency.json
+        _here = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.normpath(os.path.join(_here, "..", "..", "data", "sector_threat_frequency.json"))
+
+        # Allow override via settings (absolute paths only to avoid CWD ambiguity)
+        configured = settings.sector_threat_frequency_path
+        if configured and os.path.isabs(configured):
+            path = configured
 
         try:
             with open(path, "r") as f:
