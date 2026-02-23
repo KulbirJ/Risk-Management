@@ -28,6 +28,7 @@ export interface Assessment {
   system_background?: string;
   scope?: string;
   tech_stack: string[];
+  industry_sector?: string;
   overall_impact: 'Low' | 'Medium' | 'High' | 'Critical';
   status: 'draft' | 'in_review' | 'completed' | 'archived';
   owner_user_id: string;

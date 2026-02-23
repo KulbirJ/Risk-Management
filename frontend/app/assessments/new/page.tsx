@@ -13,12 +13,29 @@ export default function NewAssessmentPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const INDUSTRY_SECTORS = [
+    { value: '', label: 'Select industry sector (optional)' },
+    { value: 'technology', label: 'Technology & Software' },
+    { value: 'finance', label: 'Finance & Banking' },
+    { value: 'healthcare', label: 'Healthcare & Life Sciences' },
+    { value: 'government', label: 'Government & Public Sector' },
+    { value: 'energy', label: 'Energy & Utilities' },
+    { value: 'manufacturing', label: 'Manufacturing & Industrial' },
+    { value: 'retail', label: 'Retail & E-Commerce' },
+    { value: 'education', label: 'Education' },
+    { value: 'media', label: 'Media & Telecommunications' },
+    { value: 'transportation', label: 'Transportation & Logistics' },
+    { value: 'legal', label: 'Legal & Professional Services' },
+    { value: 'other', label: 'Other' },
+  ];
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     system_background: '',
     scope: '',
     tech_stack: '',
+    industry_sector: '',
     overall_impact: 'Medium',
   });
 
@@ -37,6 +54,7 @@ export default function NewAssessmentPage() {
         system_background: formData.system_background || undefined,
         scope: formData.scope || undefined,
         tech_stack: formData.tech_stack ? formData.tech_stack.split(',').map(t => t.trim()).filter(t => t) : [],
+        industry_sector: formData.industry_sector || undefined,
         overall_impact: formData.overall_impact as 'Low' | 'Medium' | 'High' | 'Critical',
         owner_user_id: mockUserId,
       };
@@ -137,22 +155,40 @@ export default function NewAssessmentPage() {
             />
           </div>
 
-          <div>
-            <label htmlFor="overall_impact" className="block text-sm font-medium text-gray-700 mb-2">
-              Overall Impact *
-            </label>
-            <select
-              id="overall_impact"
-              required
-              value={formData.overall_impact}
-              onChange={(e) => setFormData({ ...formData, overall_impact: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-              <option value="Critical">Critical</option>
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="industry_sector" className="block text-sm font-medium text-gray-700 mb-2">
+                Industry Sector
+              </label>
+              <select
+                id="industry_sector"
+                value={formData.industry_sector}
+                onChange={(e) => setFormData({ ...formData, industry_sector: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {INDUSTRY_SECTORS.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Used for sector-specific threat intelligence</p>
+            </div>
+            <div>
+              <label htmlFor="overall_impact" className="block text-sm font-medium text-gray-700 mb-2">
+                Overall Impact *
+              </label>
+              <select
+                id="overall_impact"
+                required
+                value={formData.overall_impact}
+                onChange={(e) => setFormData({ ...formData, overall_impact: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
           </div>
         </div>
 

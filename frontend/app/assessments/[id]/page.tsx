@@ -33,11 +33,28 @@ export default function AssessmentDetailPage() {
   const [isThreatModalOpen, setIsThreatModalOpen] = useState(false);
   const [editingThreat, setEditingThreat] = useState<Threat | null>(null);
   const [isEditingAssessment, setIsEditingAssessment] = useState(false);
+  const INDUSTRY_SECTORS = [
+    { value: '', label: 'Select industry sector (optional)' },
+    { value: 'technology', label: 'Technology & Software' },
+    { value: 'finance', label: 'Finance & Banking' },
+    { value: 'healthcare', label: 'Healthcare & Life Sciences' },
+    { value: 'government', label: 'Government & Public Sector' },
+    { value: 'energy', label: 'Energy & Utilities' },
+    { value: 'manufacturing', label: 'Manufacturing & Industrial' },
+    { value: 'retail', label: 'Retail & E-Commerce' },
+    { value: 'education', label: 'Education' },
+    { value: 'media', label: 'Media & Telecommunications' },
+    { value: 'transportation', label: 'Transportation & Logistics' },
+    { value: 'legal', label: 'Legal & Professional Services' },
+    { value: 'other', label: 'Other' },
+  ];
+
   const [editFormData, setEditFormData] = useState({
     title: '',
     description: '',
     system_background: '',
     scope: '',
+    industry_sector: '',
     overall_impact: 'Medium',
     status: 'draft',
   });
@@ -104,6 +121,7 @@ export default function AssessmentDetailPage() {
       description: assessment.description || '',
       system_background: assessment.system_background || '',
       scope: assessment.scope || '',
+      industry_sector: assessment.industry_sector || '',
       overall_impact: assessment.overall_impact || 'Medium',
       status: assessment.status || 'draft',
     });
@@ -433,7 +451,19 @@ export default function AssessmentDetailPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Industry Sector</label>
+                <select
+                  value={editFormData.industry_sector}
+                  onChange={(e) => setEditFormData({ ...editFormData, industry_sector: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {INDUSTRY_SECTORS.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Overall Impact</label>
                 <select
@@ -471,10 +501,18 @@ export default function AssessmentDetailPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-6 text-sm">
+          <div className="grid grid-cols-4 gap-6 text-sm">
             <div>
               <span className="text-gray-500">Overall Impact:</span>
               <p className="font-medium capitalize mt-1">{assessment.overall_impact}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">Industry Sector:</span>
+              <p className="font-medium capitalize mt-1">
+                {assessment.industry_sector
+                  ? assessment.industry_sector.replace(/_/g, ' ')
+                  : <span className="text-gray-400 italic">Not set</span>}
+              </p>
             </div>
             <div>
               <span className="text-gray-500">Created:</span>
