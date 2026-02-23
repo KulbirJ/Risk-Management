@@ -37,6 +37,7 @@ import type {
   NeighbourhoodResponse,
   ClusteringResponse,
   SimilarThreatsResponse,
+  AssessmentReport,
 } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -85,6 +86,11 @@ class APIClient {
 
   async deleteAssessment(id: string): Promise<void> {
     await this.client.delete(`/assessments/${id}`);
+  }
+
+  async getAssessmentReport(id: string): Promise<AssessmentReport> {
+    const { data } = await this.client.get(`/assessments/${id}/report`);
+    return data;
   }
 
   // Active Risks

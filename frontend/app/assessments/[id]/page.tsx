@@ -400,6 +400,12 @@ export default function AssessmentDetailPage() {
             <p className="text-gray-600">{assessment.description || 'No description'}</p>
           </div>
           <div className="flex gap-2">
+            <Link href={`/assessments/${assessmentId}/report`}>
+              <Button variant="ghost" size="sm">
+                <FileText className="w-4 h-4 mr-2" />
+                Report
+              </Button>
+            </Link>
             <Button variant="ghost" size="sm" onClick={handleEditAssessment}>
               <Edit className="w-4 h-4 mr-2" />
               Edit

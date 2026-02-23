@@ -507,3 +507,83 @@ export interface SimilarThreatsResponse {
   target_title?: string;
   similar_threats: SimilarThreat[];
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Report Types
+// ─────────────────────────────────────────────────────────────────
+
+export interface KillChainStageReport {
+  stage_number: number;
+  tactic_name: string;
+  technique_name?: string;
+  mitre_id?: string;
+  actor_behavior?: string;
+  detection_hint?: string;
+}
+
+export interface KillChainReport {
+  id: string;
+  scenario_name: string;
+  threat_actor?: string;
+  description?: string;
+  stages: KillChainStageReport[];
+}
+
+export interface AttackMappingReport {
+  mitre_id: string;
+  technique_name: string;
+  tactic_shortname?: string;
+  confidence_score: number;
+  mapping_rationale?: string;
+}
+
+export interface ThreatReportItem {
+  id: string;
+  title: string;
+  description?: string;
+  recommendation?: string;
+  catalogue_key?: string;
+  cve_ids: string[];
+  cvss_score?: string;
+  likelihood: string;
+  impact: string;
+  severity: string;
+  status: string;
+  likelihood_score: number;
+  likelihood_label: string;
+  top_factors: Array<{ feature?: string; value?: number; weight?: number; contribution?: number; [key: string]: any }>;
+  intel_sources: string[];
+  cve_data: Record<string, any>;
+  otx_data: Record<string, any>;
+  exploit_data: Record<string, any>;
+  sector_frequency: Record<string, any>;
+  attack_groups: Array<Record<string, any>>;
+  attack_mappings: AttackMappingReport[];
+  kill_chains: KillChainReport[];
+  recommendations: Array<{ id: string; title?: string; description: string; type: string; priority: string; status: string }>;
+}
+
+export interface AssessmentReportStats {
+  total: number;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  mitigated: number;
+  at_risk: number;
+  enriched: number;
+  with_exploits: number;
+  with_kill_chains: number;
+}
+
+export interface AssessmentReport {
+  assessment_id: string;
+  assessment_title: string;
+  assessment_description?: string;
+  industry_sector?: string;
+  overall_impact: string;
+  generated_at: string;
+  stats: AssessmentReportStats;
+  top_risks: ThreatReportItem[];
+  threats: ThreatReportItem[];
+}

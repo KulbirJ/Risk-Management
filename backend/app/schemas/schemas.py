@@ -700,3 +700,83 @@ class SimilarThreat(BaseModel):
     assessment_id: UUID
     likelihood_score: int
     similarity: float
+
+
+# ─────────────────────────────────────────────────────────────────
+# Report Schemas (Assessment + Per-Threat Report)
+# ─────────────────────────────────────────────────────────────────
+
+class KillChainStageReport(BaseModel):
+    stage_number: int
+    tactic_name: str
+    technique_name: Optional[str] = None
+    mitre_id: Optional[str] = None
+    actor_behavior: Optional[str] = None
+    detection_hint: Optional[str] = None
+
+
+class KillChainReport(BaseModel):
+    id: str
+    scenario_name: str
+    threat_actor: Optional[str] = None
+    description: Optional[str] = None
+    stages: List[KillChainStageReport] = []
+
+
+class AttackMappingReport(BaseModel):
+    mitre_id: str
+    technique_name: str
+    tactic_shortname: Optional[str] = None
+    confidence_score: int
+    mapping_rationale: Optional[str] = None
+
+
+class ThreatReportItem(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+    recommendation: Optional[str] = None
+    catalogue_key: Optional[str] = None
+    cve_ids: List[str] = []
+    cvss_score: Optional[str] = None
+    likelihood: str
+    impact: str
+    severity: str
+    status: str
+    likelihood_score: int
+    likelihood_label: str
+    top_factors: List[dict] = []          # from likelihood_score_rationale
+    intel_sources: List[str] = []         # which enrichment sources fired
+    cve_data: dict = {}                   # NVD + CISA KEV
+    otx_data: dict = {}                   # OTX pulses
+    exploit_data: dict = {}               # GitHub PoC
+    sector_frequency: dict = {}           # annualised sector frequency
+    attack_groups: List[dict] = []        # related threat groups
+    attack_mappings: List[AttackMappingReport] = []
+    kill_chains: List[KillChainReport] = []
+    recommendations: List[dict] = []
+
+
+class AssessmentReportStats(BaseModel):
+    total: int = 0
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+    mitigated: int = 0
+    at_risk: int = 0
+    enriched: int = 0
+    with_exploits: int = 0
+    with_kill_chains: int = 0
+
+
+class AssessmentReportResponse(BaseModel):
+    assessment_id: str
+    assessment_title: str
+    assessment_description: Optional[str] = None
+    industry_sector: Optional[str] = None
+    overall_impact: str
+    generated_at: str
+    stats: AssessmentReportStats
+    top_risks: List[ThreatReportItem] = []   # top 5 by likelihood_score desc
+    threats: List[ThreatReportItem] = []     # all threats, sorted critical → low
