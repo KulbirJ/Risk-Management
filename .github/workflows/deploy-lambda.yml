@@ -188,11 +188,24 @@ jobs:
             --query 'Arn' \
             --output text)
 
-          # Wire target → Lambda
+          # Write targets JSON to file (avoids shell quoting issues)
+          cat > /tmp/ml-retrain-target.json << 'TARGETS_EOF'
+          [
+            {
+              "Id": "ml-retrain-target",
+              "Arn": "LAMBDA_ARN_PLACEHOLDER",
+              "Input": "{\"action\":\"retrain_ml_model\",\"algorithm\":\"random_forest\",\"auto_promote\":false}"
+            }
+          ]
+          TARGETS_EOF
+
+          # Replace the placeholder with the real ARN
+          sed -i "s|LAMBDA_ARN_PLACEHOLDER|${LAMBDA_ARN}|" /tmp/ml-retrain-target.json
+
           aws events put-targets \
             --rule "compliance-platform-ml-weekly-retrain" \
             --region ${{ env.AWS_REGION }} \
-            --targets "Id=ml-retrain-target,Arn=${LAMBDA_ARN},Input={\"action\":\"retrain_ml_model\",\"algorithm\":\"random_forest\",\"auto_promote\":false}"
+            --targets file:///tmp/ml-retrain-target.json
 
           # Grant EventBridge permission to invoke Lambda (idempotent)
           aws lambda add-permission \
