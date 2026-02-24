@@ -69,7 +69,8 @@ def initiate_upload(
             evidence_id=created_evidence.id,
             upload_url=upload_url,
             upload_fields=upload_fields,
-            s3_key=s3_key
+            s3_key=s3_key,
+            upload_method="PUT" if not upload_fields else "POST",
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

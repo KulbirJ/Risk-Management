@@ -75,7 +75,7 @@ class Settings(BaseSettings):
         return self.allowed_origins
 
     # File Upload
-    max_upload_size_mb: int = 10
+    max_upload_size_mb: int = 50
     evidence_retention_days: int = 365
     allowed_upload_types: str = "application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/json,application/xml,text/xml,text/plain,image/png,image/jpeg,image/gif,image/webp"
 

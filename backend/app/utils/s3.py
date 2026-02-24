@@ -36,29 +36,29 @@ def generate_presigned_upload_url(
     expiration: int = 3600
 ) -> Tuple[str, dict]:
     """
-    Generate presigned URL for direct client upload to S3.
-    
+    Generate a presigned PUT URL for direct client upload to S3.
+
+    Using PUT (not POST) keeps the request a simple binary PUT directly
+    to S3 from the browser — no multipart form overhead, no API-Gateway
+    proxy needed, and no 10 MB fan-out base64 limit.
+
     Returns:
-        Tuple of (presigned_url, fields) for HTML form or fetch upload
+        Tuple of (presigned_put_url, {})  — empty dict signals PUT method
     """
     try:
-        max_size = settings.max_upload_size_mb * 1024 * 1024
         s3 = get_s3_client()
-        response = s3.generate_presigned_post(
-            Bucket=settings.s3_bucket_evidence,
-            Key=s3_key,
-            Fields={
-                'Content-Type': content_type
+        url = s3.generate_presigned_url(
+            'put_object',
+            Params={
+                'Bucket': settings.s3_bucket_evidence,
+                'Key': s3_key,
+                'ContentType': content_type,
             },
-            Conditions=[
-                {'Content-Type': content_type},
-                ['content-length-range', 1, max_size]
-            ],
-            ExpiresIn=expiration
+            ExpiresIn=expiration,
+            HttpMethod='PUT',
         )
-        
-        return response['url'], response['fields']
-    
+        return url, {}  # empty fields → client knows to use PUT
+
     except ClientError as e:
         logger.error(f"Error generating presigned URL: {str(e)}")
         raise Exception(f"Failed to generate upload URL: {str(e)}")

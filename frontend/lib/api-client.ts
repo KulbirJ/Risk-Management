@@ -191,7 +191,40 @@ class APIClient {
     return data;
   }
 
-  async uploadToS3(uploadUrl: string, uploadFields: Record<string, string>, file: File): Promise<void> {
+  async uploadToS3(
+    uploadUrl: string,
+    uploadFields: Record<string, string>,
+    file: File,
+    uploadMethod: 'PUT' | 'POST' = 'PUT',
+  ): Promise<void> {
+    const isPut = uploadMethod === 'PUT' || Object.keys(uploadFields).length === 0;
+
+    if (isPut) {
+      // Presigned PUT: stream the binary directly to S3 — bypasses Lambda/API
+      // Gateway entirely, so there is no 6–10 MB proxy limit.
+      try {
+        const response = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: file,
+          mode: 'cors',
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(`S3 upload failed (${response.status}): ${text}`);
+        }
+        return;
+      } catch (err: any) {
+        // Surface a clean error — do NOT fall back through proxy for PUT as
+        // large files will be rejected by API Gateway (base64 overhead).
+        throw new Error(
+          `Direct upload to cloud storage failed. ` +
+          `Please check your network connection and try again. (${err.message})`,
+        );
+      }
+    }
+
+    // ── Legacy POST presigned-URL path (multipart form) ──────────────────────
     const formData = new FormData();
     Object.entries(uploadFields).forEach(([key, value]) => {
       formData.append(key, value);
@@ -206,7 +239,14 @@ class APIClient {
         mode: 'cors',
       });
     } catch (networkErr) {
-      // CORS or network error – fall back to proxy upload through backend
+      // CORS or network error – fall back to proxy upload through backend.
+      // NOTE: The proxy path is limited to ~5 MB by API Gateway.
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error(
+          `File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB) for the fallback ` +
+          `upload path. Please check your network connection and try again.`,
+        );
+      }
       console.warn('Direct S3 upload failed, using proxy:', networkErr);
       const proxyForm = new FormData();
       proxyForm.append('file', file);
@@ -214,7 +254,7 @@ class APIClient {
       proxyForm.append('content_type', file.type || 'application/octet-stream');
       const proxyResp = await this.client.post('/evidence/proxy-upload', proxyForm, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        maxBodyLength: 10 * 1024 * 1024,
+        maxBodyLength: 5 * 1024 * 1024,
       });
       if (proxyResp.status >= 400) {
         throw new Error(`Proxy upload failed: ${proxyResp.statusText}`);

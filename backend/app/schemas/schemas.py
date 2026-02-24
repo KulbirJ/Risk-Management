@@ -142,6 +142,7 @@ class EvidenceInitResponse(BaseModel):
     upload_url: str
     upload_fields: dict
     s3_key: str
+    upload_method: str = "PUT"  # "PUT" = presigned PUT (recommended); "POST" = legacy multipart
 
 
 class EvidenceComplete(BaseModel):

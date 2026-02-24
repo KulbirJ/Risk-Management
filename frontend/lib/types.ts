@@ -80,6 +80,8 @@ export interface EvidenceInitResponse {
   upload_url: string;
   upload_fields: Record<string, string>;
   s3_key: string;
+  /** 'PUT' = presigned PUT (binary body); 'POST' = legacy multipart form */
+  upload_method?: 'PUT' | 'POST';
 }
 
 export interface AuditLog {
