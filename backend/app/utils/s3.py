@@ -1,5 +1,6 @@
 """S3 utilities for evidence file uploads."""
 import boto3
+from botocore.client import Config
 from botocore.exceptions import ClientError
 from typing import Tuple, Optional
 from uuid import UUID, uuid4
@@ -12,12 +13,26 @@ logger = logging.getLogger(__name__)
 
 def get_s3_client():
     """Get a fresh S3 client using boto3 default credential chain.
-    
+
     Creates a new client each time to avoid stale credential issues.
     In Lambda, boto3 automatically uses the execution role's temporary
     credentials (access key + secret + session token) from the environment.
+
+    IMPORTANT: endpoint_url is set explicitly to the regional endpoint so that
+    presigned URLs are generated with the regional hostname
+    (e.g. s3.ca-west-1.amazonaws.com) rather than the global s3.amazonaws.com
+    endpoint.  Without this, S3 returns a 307 redirect to the regional endpoint
+    and browsers abort CORS requests on redirects (status: null).
+
+    signature_version=s3v4 is required for ca-west-1 and all post-2014 regions.
     """
-    return boto3.client('s3', region_name=settings.s3_bucket_region)
+    region = settings.s3_bucket_region
+    return boto3.client(
+        's3',
+        region_name=region,
+        endpoint_url=f'https://s3.{region}.amazonaws.com',
+        config=Config(signature_version='s3v4'),
+    )
 
 
 def generate_evidence_s3_key(
