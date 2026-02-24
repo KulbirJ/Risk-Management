@@ -15,6 +15,7 @@ import { IntelEnrichmentPanel, EnrichmentBadge } from '../../../components/Intel
 import { MLScoringPanel, MLScoreBadge } from '../../../components/MLScoringPanel';
 import { ThreatGraphPanel } from '../../../components/ThreatGraphPanel';
 import { ClusteringPanel } from '../../../components/ClusteringPanel';
+import { TriggerAssessmentButton } from '../../../components/TriggerAssessmentButton';
 import apiClient from '../../../lib/api-client';
 import { Assessment, Threat, ActiveRisk, Recommendation, Evidence } from '../../../lib/types';
 import { format } from 'date-fns';
@@ -404,7 +405,12 @@ export default function AssessmentDetailPage() {
             </div>
             <p className="text-gray-600">{assessment.description || 'No description'}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center flex-wrap">
+            {/* One-click full pipeline button */}
+            <TriggerAssessmentButton
+              assessmentId={assessmentId}
+              onComplete={loadAssessmentData}
+            />
             <Link href={`/assessments/${assessmentId}/report`}>
               <Button variant="ghost" size="sm">
                 <FileText className="w-4 h-4 mr-2" />

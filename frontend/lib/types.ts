@@ -148,6 +148,21 @@ export interface IntelligenceJob {
   created_at: string;
 }
 
+/** One step inside a full-assessment-run job's results. */
+export interface FullRunStep {
+  name: string;
+  label: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  message: string;
+  percent_end: number;
+}
+
+/** Shape of IntelligenceJob.results for job_type="full_assessment_run". */
+export interface FullRunResults {
+  steps: FullRunStep[];
+  percent_complete: number;
+}
+
 export interface IntelligenceStatus {
   bedrock_enabled: boolean;
   primary_model: string;

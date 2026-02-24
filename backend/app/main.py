@@ -625,12 +625,53 @@ try:
             _logger.error(f"[MIGRATE] FAILED: {e}\n{traceback.format_exc()}")
             return {"statusCode": 500, "body": f"Migration failed: {e}"}
 
+    def _handle_full_assessment_run(event):
+        """
+        Lambda action: run_full_assessment
+        Runs the complete risk-assessment pipeline for one assessment:
+          AI enrichment → intel → ML scoring → clustering → ATT&CK mapping → kill chains
+        Progress is written to IntelligenceJob.results so the frontend can poll it.
+        """
+        import traceback
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.setLevel(logging.INFO)
+
+        job_id       = event["job_id"]
+        assessment_id = event["assessment_id"]
+        tenant_id    = event["tenant_id"]
+        user_id      = event["user_id"]
+
+        _logger.info("[FULL_RUN] Lambda handler invoked: job=%s", job_id)
+        try:
+            from .db.database import SessionLocal
+            from .services.full_run_service import run_full_assessment_pipeline
+            from .models.models import IntelligenceJob
+            from datetime import datetime
+
+            db = SessionLocal()
+            try:
+                return run_full_assessment_pipeline(
+                    db=db,
+                    job_id=job_id,
+                    assessment_id=assessment_id,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                )
+            finally:
+                db.close()
+        except Exception as exc:
+            _logger.error("[FULL_RUN] Fatal error: %s\n%s", exc, traceback.format_exc())
+            return {"statusCode": 500, "body": f"Full assessment run failed: {exc}"}
+
     def lambda_handler(event, context):
-        """Route Lambda events: migrations, async enrichment, or API Gateway via Mangum."""
+        """Route Lambda events: migrations, async enrichment, full run, or API Gateway via Mangum."""
         if isinstance(event, dict):
             action = event.get("action", "")
             if action == "enrich_assessment":
                 return _handle_async_enrichment(event)
+            if action == "run_full_assessment":
+                return _handle_full_assessment_run(event)
             if action in ("run_migrations", "migrate"):
                 return _handle_run_migrations(event)
             if action == "retrain_ml_model":

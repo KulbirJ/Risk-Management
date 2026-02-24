@@ -214,6 +214,138 @@ def get_assessment_stats(
 
 
 # ─────────────────────────────────────────────────────────────────
+# Full Assessment Run — one-click full pipeline trigger
+# ─────────────────────────────────────────────────────────────────
+
+@router.post("/{assessment_id}/run-full")
+def trigger_full_assessment(
+    assessment_id: UUID,
+    db: Session = Depends(get_db),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context),
+):
+    """
+    Trigger the complete risk-assessment pipeline in a single click:
+
+      1. AI Risk Enrichment     — extract / map threats via Bedrock
+      2. Intel Threat Enrichment — CVE, ATT&CK groups, sector frequency
+      3. ML Risk Scoring         — predict likelihood with trained model
+      4. Threat Clustering       — DBSCAN grouping
+      5. ATT&CK Auto-Mapping     — AI-suggest + persist technique mappings
+      6. Attack Scenarios        — generate kill-chain narratives
+
+    Returns a job_id immediately.  Poll GET /intelligence/jobs/{job_id} for
+    real-time step-level progress stored in job.results.steps[].
+    """
+    import json
+    from datetime import datetime, timedelta
+    from ..models.models import Assessment, IntelligenceJob
+    from ..core.config import settings
+    from ..services.full_run_service import build_initial_results
+
+    tenant_id, user_id = context
+
+    # Verify assessment belongs to this tenant
+    assessment = db.query(Assessment).filter(
+        Assessment.id == assessment_id,
+        Assessment.tenant_id == tenant_id,
+    ).first()
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    # Auto-expire stuck full-run jobs older than 5 minutes
+    stuck_cutoff = datetime.utcnow() - timedelta(minutes=5)
+    for sj in db.query(IntelligenceJob).filter(
+        IntelligenceJob.assessment_id == assessment_id,
+        IntelligenceJob.job_type == "full_assessment_run",
+        IntelligenceJob.status.in_(["pending", "running"]),
+        IntelligenceJob.created_at < stuck_cutoff,
+    ).all():
+        sj.status = "failed"
+        sj.error_message = "Auto-expired: job exceeded timeout"
+        sj.completed_at = datetime.utcnow()
+    db.commit()
+
+    # Block duplicate runs
+    existing = db.query(IntelligenceJob).filter(
+        IntelligenceJob.assessment_id == assessment_id,
+        IntelligenceJob.job_type == "full_assessment_run",
+        IntelligenceJob.status.in_(["pending", "running"]),
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A full assessment run is already in progress (job: {existing.id}). "
+                   "Refresh the page to track its progress.",
+        )
+
+    # Create the job record (steps initialised to pending)
+    job = IntelligenceJob(
+        tenant_id=tenant_id,
+        assessment_id=assessment_id,
+        initiated_by_id=user_id,
+        status="pending",
+        job_type="full_assessment_run",
+        model_id=settings.bedrock_model_id,
+        results=build_initial_results(),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    job_id_str = str(job.id)
+
+    # Invoke Lambda asynchronously — the async event won't block the HTTP response
+    invoked_async = False
+    try:
+        import boto3
+        lambda_client = boto3.client("lambda", region_name=settings.aws_region)
+        lambda_client.invoke(
+            FunctionName="compliance-platform-api",
+            InvocationType="Event",  # fire-and-forget
+            Payload=json.dumps({
+                "action": "run_full_assessment",
+                "job_id": job_id_str,
+                "assessment_id": str(assessment_id),
+                "tenant_id": str(tenant_id),
+                "user_id": str(user_id),
+            }),
+        )
+        invoked_async = True
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Lambda async invoke failed, falling back to background thread: %s", exc
+        )
+
+    if not invoked_async:
+        # Fallback: run in a background thread (best-effort for local dev / missing Lambda)
+        import threading
+        from ..services.full_run_service import run_full_assessment_pipeline
+
+        def _bg():
+            from ..db.database import SessionLocal
+            bg_db = SessionLocal()
+            try:
+                run_full_assessment_pipeline(
+                    db=bg_db,
+                    job_id=job_id_str,
+                    assessment_id=str(assessment_id),
+                    tenant_id=str(tenant_id),
+                    user_id=str(user_id),
+                )
+            finally:
+                bg_db.close()
+
+        threading.Thread(target=_bg, daemon=True).start()
+
+    return {
+        "job_id": job_id_str,
+        "status": job.status,
+        "message": "Full assessment pipeline started. Poll /intelligence/jobs/{job_id} for progress.",
+    }
+
+
+# ─────────────────────────────────────────────────────────────────
 # Report endpoint — aggregates all threat data in one call
 # ─────────────────────────────────────────────────────────────────
 

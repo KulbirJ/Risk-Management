@@ -375,6 +375,12 @@ class APIClient {
     return data;
   }
 
+  /** Trigger the full assessment pipeline (all 6 steps) in one click. Returns job_id. */
+  async runFullAssessment(assessmentId: string): Promise<{ job_id: string; status: string; message: string }> {
+    const { data } = await this.client.post(`/assessments/${assessmentId}/run-full`);
+    return data;
+  }
+
   // ─── MITRE ATT&CK ───────────────────────────────────────────────
 
   // Reference data
