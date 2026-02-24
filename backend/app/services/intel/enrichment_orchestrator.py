@@ -15,12 +15,14 @@ from ...core.config import settings
 from ...models.models import (
     Threat, ThreatIntelEnrichment, ThreatAttackMapping,
     AttackTechnique, AttackGroup, Assessment,
+    KillChain, KillChainStage,
 )
 from .nvd_service import NVDService
 from .cisa_kev_service import CISAKEVService
 from .otx_service import OTXService
 from .github_exploit_service import GitHubExploitService
 from .sector_frequency_service import SectorFrequencyService
+from .epss_service import EPSSService
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,7 @@ class EnrichmentOrchestrator:
         self.otx = OTXService()
         self.github = GitHubExploitService()
         self.sector = SectorFrequencyService()
+        self.epss = EPSSService()
 
     async def enrich_threats(
         self,
@@ -160,6 +163,19 @@ class EnrichmentOrchestrator:
                 if github_result:
                     unified_features.update(github_result)
 
+            # EPSS batch — single request for all CVEs on this threat (most accurate
+            # exploitation probability signal; updated daily by FIRST.org, no API key)
+            try:
+                epss_scores = await self.epss.get_scores(cve_ids[:5])
+                epss_features = self.epss.build_feature_vector(epss_scores)
+                # epss_score from FIRST.org is more complete than nvd_epss_score;
+                # update nvd_epss_score only when NVD didn't already provide a value
+                if unified_features.get("nvd_epss_score", 0) == 0:
+                    unified_features["nvd_epss_score"] = epss_features.get("epss_score", 0)
+                unified_features["epss_percentile"] = epss_features.get("epss_percentile", 0)
+            except Exception as _epss_err:
+                logger.debug("EPSS enrichment skipped for threat %s: %s", threat.id, _epss_err)
+
         # ──────────────── TRACK B: Non-CVE / ATT&CK-based ────────────────
 
         # ATT&CK technique-based enrichment (runs for ALL threats, CVE or not)
@@ -217,6 +233,32 @@ class EnrichmentOrchestrator:
         unified_features["mapped_technique_count"] = len(technique_ids)
         unified_features["has_cve"] = 1 if has_cves else 0
         unified_features["cve_count"] = len(cve_ids)
+
+        # ── Kill chain features (Stage 2 ML improvement) ──────────────────────
+        # Longer validated kill chains = more realistic, higher persistence threat
+        try:
+            kill_chains = (
+                db.query(KillChain)
+                .filter(KillChain.threat_id == threat.id, KillChain.status == "complete")
+                .all()
+            )
+            max_depth = 0
+            reaches_impact = 0
+            impact_tactics = {"impact", "collection", "exfiltration", "command-and-control"}
+            for kc in kill_chains:
+                stages = kc.stages or []
+                depth = len(stages)
+                if depth > max_depth:
+                    max_depth = depth
+                tactic_names = {str(s.tactic_name or "").lower() for s in stages}
+                if tactic_names & impact_tactics:
+                    reaches_impact = 1
+            unified_features["kill_chain_depth"] = max_depth
+            unified_features["kill_chain_reaches_impact"] = reaches_impact
+        except Exception as _kc_err:
+            logger.debug("Kill chain features skipped for threat %s: %s", threat.id, _kc_err)
+            unified_features.setdefault("kill_chain_depth", 0)
+            unified_features.setdefault("kill_chain_reaches_impact", 0)
 
         # ──────────────── Compute preliminary likelihood score ────────────────
         likelihood_score = self._compute_likelihood_score(unified_features)

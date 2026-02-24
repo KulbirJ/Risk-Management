@@ -229,6 +229,16 @@ class ActiveRiskUpdate(BaseModel):
     score_locked: Optional[bool] = None
 
 
+class ActiveRiskOutcomeUpdate(BaseModel):
+    """Record real-world outcome — feeds ground-truth labels into ML training."""
+    outcome: str
+    # materialized_breach | materialized_incident | mitigated_successfully
+    # | accepted_no_incident | expired_unresolved
+    outcome_severity: Optional[str] = None  # none | minor | moderate | major | critical
+    false_positive: Optional[bool] = None
+    days_to_resolution: Optional[int] = None
+
+
 class ActiveRiskRead(ActiveRiskBase):
     id: UUID
     assessment_id: UUID
@@ -245,6 +255,12 @@ class ActiveRiskRead(ActiveRiskBase):
     risk_score: Optional[int] = None
     likelihood: Optional[int] = None
     impact: Optional[int] = None
+    # Outcome tracking fields
+    outcome: Optional[str] = None
+    outcome_recorded_at: Optional[datetime] = None
+    outcome_severity: Optional[str] = None
+    days_to_resolution: Optional[int] = None
+    false_positive: Optional[bool] = False
     created_at: datetime
     updated_at: datetime
 

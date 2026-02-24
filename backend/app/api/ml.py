@@ -40,6 +40,20 @@ def _scoring() -> MLScoringService:
     global _scoring_service
     if _scoring_service is None:
         _scoring_service = MLScoringService()
+        # Cold-start: attempt to load the production model from S3 (Stage 3)
+        # If no model exists yet, the service degrades to rule-based scoring
+        result = _scoring_service.load_from_s3(stage="latest")
+        if result.get("loaded"):
+            logger.info(
+                "Cold-start: loaded ML model from S3 (algo=%s, trained=%s)",
+                result.get("algorithm"),
+                result.get("trained_at"),
+            )
+        else:
+            logger.info(
+                "Cold-start: no S3 model found (%s) — using rule-based fallback",
+                result.get("reason", "unknown"),
+            )
     return _scoring_service
 
 
@@ -206,3 +220,66 @@ def survival_curve(
 ):
     """Return survival curve (time → probability) for the tenant's risks."""
     return _survival().survival_curve(db, UUID(tenant_id), sector=sector)
+
+
+# ═══════════════════════════════════════════════════════════════
+# MODEL REGISTRY (Stage 3 — S3 promote gate)
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/promote-model")
+def promote_model(
+    db: Session = Depends(get_db),
+):
+    """
+    Promote the current S3 candidate model to production (latest).
+
+    Safety gate: only promotes if candidate cv_accuracy_mean ≥ current
+    production model accuracy.  After promotion the next Lambda cold-start
+    will automatically load the new model.
+
+    This endpoint requires a human to trigger it deliberately — automated
+    retraining (Stage 4) saves to candidate/ only and waits for manual approval.
+    """
+    result = _scoring().promote_model()
+    if result.get("promoted"):
+        # Write audit entry
+        try:
+            from ..models.models import AuditLog
+            from ..core.config import settings as _cfg
+            audit = AuditLog(
+                tenant_id=UUID(TENANT_ID),
+                action_type="ml.model_promoted",
+                resource_type="MLModel",
+                resource_id="latest",
+                changes=result,
+            )
+            db.add(audit)
+            db.commit()
+        except Exception:
+            pass
+        return result
+    raise HTTPException(status_code=400, detail=result.get("reason", "Promotion failed"))
+
+
+@router.get("/model-versions")
+def model_versions():
+    """
+    Return metadata for both the candidate and production (latest) model versions
+    stored in S3.  Useful for comparing before deciding to promote.
+    """
+    svc = _scoring()
+    result = {}
+    for stage in ("latest", "candidate"):
+        try:
+            import boto3
+            import json as _json
+            from ..core.config import settings as _cfg
+            bucket = svc._s3_bucket()
+            key = f"{_cfg.ml_model_s3_prefix}/{stage}/metadata.json"
+            obj = boto3.client("s3", region_name=_cfg.s3_bucket_region).get_object(
+                Bucket=bucket, Key=key
+            )
+            result[stage] = _json.loads(obj["Body"].read())
+        except Exception as e:
+            result[stage] = {"available": False, "reason": str(e)}
+    return result

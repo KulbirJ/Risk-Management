@@ -602,6 +602,12 @@ try:
                     ("active_risks", "next_review_date", "TIMESTAMP WITH TIME ZONE"),
                     ("active_risks", "estimated_persistence_days", "INTEGER"),
                     ("active_risks", "score_locked", "BOOLEAN DEFAULT FALSE"),
+                    # Stage 1 outcome tracking columns
+                    ("active_risks", "outcome", "VARCHAR(50)"),
+                    ("active_risks", "outcome_recorded_at", "TIMESTAMP WITH TIME ZONE"),
+                    ("active_risks", "outcome_severity", "VARCHAR(20)"),
+                    ("active_risks", "days_to_resolution", "INTEGER"),
+                    ("active_risks", "false_positive", "BOOLEAN DEFAULT FALSE"),
                 ]
                 for table, column, col_type in schema_updates:
                     existing = [c["name"] for c in inspector.get_columns(table)]
@@ -627,7 +633,95 @@ try:
                 return _handle_async_enrichment(event)
             if action in ("run_migrations", "migrate"):
                 return _handle_run_migrations(event)
+            if action == "retrain_ml_model":
+                return _handle_ml_retrain(event)
+            # EventBridge scheduled event (source = "aws.events")
+            if event.get("source") == "aws.events" and "retrain" in str(event.get("detail-type", "")).lower():
+                return _handle_ml_retrain(event)
         return _mangum_handler(event, context)
+
+    def _handle_ml_retrain(event):
+        """
+        Stage 4 — Scheduled / on-demand ML retraining handler.
+
+        Invoked by:
+          - EventBridge cron (every Sunday 3AM UTC)
+          - Manual: POST /ml/train
+          - Direct Lambda invoke: {"action": "retrain_ml_model"}
+
+        Quality gates:
+          1. Requires ≥ 10 enriched threats (configurable via min_samples).
+          2. Saves to S3 candidate/ only — NOT auto-promoted.
+          3. Sends SNS notification if ML_RETRAIN_SNS_TOPIC env var is set.
+        """
+        import logging
+        import os
+        import json
+        import traceback
+        _logger = logging.getLogger(__name__)
+        _logger.info("[ML_RETRAIN] Starting scheduled retraining...")
+
+        algorithm = event.get("algorithm", "random_forest")
+        min_samples = int(event.get("min_samples", 10))
+        auto_promote = bool(event.get("auto_promote", False))
+
+        try:
+            from .db.database import SessionLocal
+            from .services.ml.scoring_service import MLScoringService
+            from uuid import UUID as _UUID
+            from .core.config import settings as _cfg
+
+            TENANT_ID = "67636bd3-9846-4bde-806f-aea369fc9457"
+
+            db = SessionLocal()
+            result = {}
+            try:
+                svc = MLScoringService()
+                result = svc.train(
+                    db,
+                    _UUID(TENANT_ID),
+                    algorithm=algorithm,
+                    min_samples=min_samples,
+                )
+            finally:
+                db.close()
+
+            _logger.info("[ML_RETRAIN] Training result: %s", result)
+
+            # Auto-promote if caller requested AND accuracy improved
+            if auto_promote and result.get("trained"):
+                promote_result = svc.promote_model()
+                result["promotion"] = promote_result
+                _logger.info("[ML_RETRAIN] Promotion result: %s", promote_result)
+
+            # Optional SNS notification
+            sns_topic = os.environ.get("ML_RETRAIN_SNS_TOPIC")
+            if sns_topic and result.get("trained"):
+                try:
+                    import boto3
+                    sns = boto3.client("sns", region_name=_cfg.aws_region)
+                    accuracy = result.get("metrics", {}).get("cv_accuracy_mean", 0)
+                    promoted = result.get("promotion", {}).get("promoted", False)
+                    msg = (
+                        f"ML Model Retraining Complete\n"
+                        f"Algorithm: {algorithm}\n"
+                        f"Samples: {result.get('n_samples', 0)}\n"
+                        f"Accuracy: {accuracy:.4f}\n"
+                        f"Real outcomes: {result.get('using_real_outcomes', False)}\n"
+                        f"Candidate saved to S3: {result.get('s3_candidate', 'N/A')}\n"
+                        f"Auto-promoted: {promoted}\n"
+                        f"Action needed: {'None' if promoted else 'Review candidate and call POST /ml/promote-model if satisfied'}"
+                    )
+                    sns.publish(TopicArn=sns_topic, Subject="[Compliance Platform] ML Model Retrained", Message=msg)
+                    _logger.info("[ML_RETRAIN] SNS notification sent")
+                except Exception as _sns_err:
+                    _logger.warning("[ML_RETRAIN] SNS notification failed: %s", _sns_err)
+
+            return {"statusCode": 200, "body": json.dumps(result)}
+
+        except Exception as e:
+            _logger.error("[ML_RETRAIN] FAILED: %s\n%s", e, traceback.format_exc())
+            return {"statusCode": 500, "body": f"ML retraining failed: {e}"}
 
 except ImportError:
     # Mangum not installed, likely running locally

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session
 
 from ..db.database import get_db
-from ..schemas.schemas import ActiveRiskCreate, ActiveRiskRead, ActiveRiskUpdate
+from ..schemas.schemas import ActiveRiskCreate, ActiveRiskRead, ActiveRiskUpdate, ActiveRiskOutcomeUpdate
 from ..services.active_risk_service import ActiveRiskService
 
 router = APIRouter()
@@ -150,6 +150,77 @@ def update_active_risk(
         return updated_risk
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.patch("/{risk_id}/outcome", response_model=ActiveRiskRead)
+def record_outcome(
+    risk_id: UUID,
+    outcome_data: ActiveRiskOutcomeUpdate,
+    db: Session = Depends(get_db),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context)
+):
+    """
+    Record the real-world outcome of a closed/resolved active risk.
+
+    This data feeds ground-truth labels back into the ML training pipeline.
+    Outcomes should be recorded when a risk is resolved, mitigated, or
+    accepted with a known result.
+
+    outcome values:
+      materialized_breach, materialized_incident, mitigated_successfully,
+      accepted_no_incident, expired_unresolved
+    """
+    from datetime import datetime as _dt
+    tenant_id, user_id = context
+
+    risk = ActiveRiskService.get_active_risk(db=db, risk_id=risk_id, tenant_id=tenant_id)
+    if not risk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Active risk {risk_id} not found")
+
+    valid_outcomes = {
+        "materialized_breach", "materialized_incident",
+        "mitigated_successfully", "accepted_no_incident", "expired_unresolved"
+    }
+    if outcome_data.outcome not in valid_outcomes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid outcome. Must be one of: {', '.join(sorted(valid_outcomes))}"
+        )
+
+    risk.outcome = outcome_data.outcome
+    risk.outcome_recorded_at = _dt.utcnow()
+    if outcome_data.outcome_severity is not None:
+        risk.outcome_severity = outcome_data.outcome_severity
+    if outcome_data.false_positive is not None:
+        risk.false_positive = outcome_data.false_positive
+    if outcome_data.days_to_resolution is not None:
+        risk.days_to_resolution = outcome_data.days_to_resolution
+    elif risk.created_at:
+        # Auto-compute from created_at if not provided
+        risk.days_to_resolution = (_dt.utcnow() - risk.created_at.replace(tzinfo=None)).days
+
+    # Auto-close risk when outcome is recorded
+    if risk.status == "open":
+        risk.status = "closed"
+
+    # Write audit log
+    from ..models.models import AuditLog
+    try:
+        audit = AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=user_id,
+            action_type="active_risk.outcome_recorded",
+            resource_type="ActiveRisk",
+            resource_id=str(risk_id),
+            changes={"outcome": outcome_data.outcome, "outcome_severity": outcome_data.outcome_severity},
+        )
+        db.add(audit)
+    except Exception:
+        pass
+
+    db.commit()
+    db.refresh(risk)
+    return risk
 
 
 @router.post("/{risk_id}/accept", response_model=ActiveRiskRead)

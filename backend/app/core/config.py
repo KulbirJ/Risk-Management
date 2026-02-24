@@ -108,6 +108,10 @@ class Settings(BaseSettings):
     github_pat: Optional[str] = None           # GitHub Personal Access Token for search API
     intel_s3_bucket: Optional[str] = None      # S3 bucket for caching large intel payloads
     sector_threat_frequency_path: str = "app/data/sector_threat_frequency.json"  # Static reference data
+    # ML model registry — uses the same evidence bucket under the ml-models/ prefix
+    # Override to point to a dedicated bucket if desired
+    ml_model_s3_bucket: Optional[str] = None   # defaults to s3_bucket_evidence
+    ml_model_s3_prefix: str = "ml-models/likelihood"  # candidate/ and latest/ sub-prefixes
 
     class Config:
         env_file = ".env"

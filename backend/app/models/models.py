@@ -190,6 +190,14 @@ class ActiveRisk(Base):
     detected_by = Column(String(50), default="manual")  # manual, ai_intelligence
     ai_rationale = Column(Text, nullable=True)  # AI explanation for risk score
     extra_data = Column(JSONB, default={})  # Additional risk metadata
+    # Outcome tracking — feeds real-world labels back into ML training (Stage 1)
+    outcome = Column(String(50), nullable=True)
+    # Values: materialized_breach, materialized_incident, mitigated_successfully,
+    #         accepted_no_incident, expired_unresolved
+    outcome_recorded_at = Column(DateTime(timezone=True), nullable=True)
+    outcome_severity = Column(String(20), nullable=True)  # none, minor, moderate, major, critical
+    days_to_resolution = Column(Integer, nullable=True)   # actual days open — survival ground truth
+    false_positive = Column(Boolean, default=False)        # risk owner: "this was never real"
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

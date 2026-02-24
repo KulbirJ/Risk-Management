@@ -164,6 +164,47 @@ jobs:
           cat migration-response.json
           echo ""
           echo "Migrations completed"
+
+      - name: Create ML retraining CloudWatch schedule (Stage 4)
+        run: |
+          echo "Setting up weekly ML retraining EventBridge rule..."
+          LAMBDA_ARN=$(aws lambda get-function \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Configuration.FunctionArn' \
+            --output text)
+
+          # Create or update the schedule rule (idempotent)
+          aws events put-rule \
+            --name "compliance-platform-ml-weekly-retrain" \
+            --schedule-expression "cron(0 3 ? * SUN *)" \
+            --description "Weekly ML model retraining - Sunday 3AM UTC" \
+            --state ENABLED \
+            --region ${{ env.AWS_REGION }}
+
+          RULE_ARN=$(aws events describe-rule \
+            --name "compliance-platform-ml-weekly-retrain" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Arn' \
+            --output text)
+
+          # Wire target → Lambda
+          aws events put-targets \
+            --rule "compliance-platform-ml-weekly-retrain" \
+            --region ${{ env.AWS_REGION }} \
+            --targets "Id=ml-retrain-target,Arn=${LAMBDA_ARN},Input={\"action\":\"retrain_ml_model\",\"algorithm\":\"random_forest\",\"auto_promote\":false}"
+
+          # Grant EventBridge permission to invoke Lambda (idempotent)
+          aws lambda add-permission \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --statement-id "AllowEventBridgeMLRetrain" \
+            --action "lambda:InvokeFunction" \
+            --principal "events.amazonaws.com" \
+            --source-arn "${RULE_ARN}" \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || \
+          echo "Permission already exists (idempotent)"
+
+          echo "✅ ML retraining schedule configured: every Sunday 3AM UTC"
       
       - name: Create deployment artifact
         run: |

@@ -20,8 +20,8 @@ Design constraints
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import math
 import pickle
 from datetime import datetime
@@ -36,6 +36,7 @@ try:
 except ImportError:
     np = None  # type: ignore[assignment]
 
+from ...core.config import settings
 from ...models.models import (
     ActiveRisk,
     Assessment,
@@ -75,6 +76,10 @@ FEATURE_KEYS: List[str] = [
     "mapped_technique_count",
     "has_cve",
     "cve_count",
+    # Stage 2 additions — live signals & structural features
+    "epss_percentile",          # FIRST.org EPSS relative rank vs all CVEs (0-1)
+    "kill_chain_depth",         # Max no. of stages across validated kill chains
+    "kill_chain_reaches_impact", # 1 if any kill chain reaches Impact/Exfil tactic
 ]
 
 NUM_FEATURES = len(FEATURE_KEYS)
@@ -238,7 +243,20 @@ class MLScoringService:
             len(X),
             metrics["cv_accuracy_mean"],
         )
-        return {"trained": True, "n_samples": len(X), "metrics": metrics, "algorithm": algorithm}
+
+        # ── Persist to S3 candidate prefix (Stage 3) ────────────
+        s3_result = self.save_to_s3(stage="candidate")
+        if s3_result.get("saved"):
+            logger.info("Model saved to S3 candidate: %s", s3_result.get("s3_key"))
+
+        return {
+            "trained": True,
+            "n_samples": len(X),
+            "metrics": metrics,
+            "algorithm": algorithm,
+            "using_real_outcomes": self._model_meta.get("using_real_outcomes", False),
+            "s3_candidate": s3_result.get("s3_key"),
+        }
 
     # ══════════════════════════════════════════════════════════════
     # INFERENCE
@@ -552,6 +570,134 @@ class MLScoringService:
         logger.info("ML model imported: %s", self._model_meta.get("algorithm"))
         return self.model_info
 
+    # ── S3 model registry (Stage 3) ──────────────────────────────
+
+    def _s3_bucket(self) -> str:
+        """The S3 bucket used for ML model storage."""
+        return settings.ml_model_s3_bucket or settings.s3_bucket_evidence
+
+    def save_to_s3(self, stage: str = "candidate") -> Dict[str, Any]:
+        """
+        Serialise the current model and upload to S3.
+
+        stage : "candidate" or "latest"
+        Key:  {ml_model_s3_prefix}/{stage}/model.pkl
+              {ml_model_s3_prefix}/{stage}/metadata.json
+        """
+        if not self.is_trained:
+            return {"saved": False, "reason": "No trained model"}
+        try:
+            import boto3
+            bucket = self._s3_bucket()
+            prefix = f"{settings.ml_model_s3_prefix}/{stage}"
+            model_key = f"{prefix}/model.pkl"
+            meta_key = f"{prefix}/metadata.json"
+
+            model_bytes = self.export_model()
+            s3 = boto3.client("s3", region_name=settings.s3_bucket_region)
+            s3.put_object(Bucket=bucket, Key=model_key, Body=model_bytes)
+
+            meta_json = json.dumps({
+                **self._model_meta,
+                "feature_keys": FEATURE_KEYS,
+                "num_features": NUM_FEATURES,
+                "s3_key": model_key,
+                "saved_at": datetime.utcnow().isoformat(),
+            }).encode()
+            s3.put_object(Bucket=bucket, Key=meta_key, Body=meta_json,
+                          ContentType="application/json")
+
+            logger.info("Model saved to s3://%s/%s", bucket, model_key)
+            return {"saved": True, "s3_key": model_key, "bucket": bucket, "stage": stage}
+        except Exception as e:
+            logger.warning("Failed to save model to S3: %s", e)
+            return {"saved": False, "reason": str(e)}
+
+    def load_from_s3(self, stage: str = "latest") -> Dict[str, Any]:
+        """
+        Download and load a model from S3.
+
+        stage : "latest" (production) or "candidate" (pending promotion)
+        """
+        try:
+            import boto3
+            bucket = self._s3_bucket()
+            model_key = f"{settings.ml_model_s3_prefix}/{stage}/model.pkl"
+            s3 = boto3.client("s3", region_name=settings.s3_bucket_region)
+            obj = s3.get_object(Bucket=bucket, Key=model_key)
+            model_bytes = obj["Body"].read()
+            self.import_model(model_bytes)
+            logger.info("Model loaded from s3://%s/%s", bucket, model_key)
+            return {"loaded": True, "s3_key": model_key, "stage": stage, **self.model_info}
+        except Exception as e:
+            logger.debug("Could not load model from S3 stage=%s: %s", stage, e)
+            return {"loaded": False, "reason": str(e)}
+
+    def promote_model(self) -> Dict[str, Any]:
+        """
+        Promote the candidate model to latest, but ONLY if candidate F1 ≥ current latest.
+
+        Copies:  ml-models/likelihood/candidate/ → ml-models/likelihood/latest/
+        Returns: result dict with promoted=True/False and comparison metrics.
+        """
+        try:
+            import boto3
+            bucket = self._s3_bucket()
+            prefix = settings.ml_model_s3_prefix
+            s3 = boto3.client("s3", region_name=settings.s3_bucket_region)
+
+            # Read candidate metadata
+            cand_meta_key = f"{prefix}/candidate/metadata.json"
+            cand_obj = s3.get_object(Bucket=bucket, Key=cand_meta_key)
+            candidate_meta = json.loads(cand_obj["Body"].read())
+
+            # Read current-latest metadata (may not exist yet)
+            current_f1 = 0.0
+            try:
+                latest_meta_key = f"{prefix}/latest/metadata.json"
+                latest_obj = s3.get_object(Bucket=bucket, Key=latest_meta_key)
+                latest_meta = json.loads(latest_obj["Body"].read())
+                current_f1 = float(
+                    latest_meta.get("metrics", {}).get("cv_accuracy_mean", 0)
+                )
+            except Exception:
+                logger.info("No existing latest model — promoting unconditionally")
+
+            candidate_f1 = float(
+                candidate_meta.get("metrics", {}).get("cv_accuracy_mean", 0)
+            )
+
+            if candidate_f1 < current_f1:
+                return {
+                    "promoted": False,
+                    "reason": f"Candidate accuracy {candidate_f1:.4f} < current {current_f1:.4f}",
+                    "candidate_accuracy": candidate_f1,
+                    "current_accuracy": current_f1,
+                }
+
+            # Copy model.pkl and metadata.json from candidate → latest
+            for obj_suffix in ["model.pkl", "metadata.json"]:
+                copy_source = {"Bucket": bucket, "Key": f"{prefix}/candidate/{obj_suffix}"}
+                s3.copy_object(
+                    CopySource=copy_source,
+                    Bucket=bucket,
+                    Key=f"{prefix}/latest/{obj_suffix}",
+                )
+
+            logger.info(
+                "Model promoted: acc %.4f → %.4f (candidate → latest)",
+                current_f1, candidate_f1,
+            )
+            return {
+                "promoted": True,
+                "candidate_accuracy": candidate_f1,
+                "previous_accuracy": current_f1,
+                "s3_path": f"s3://{bucket}/{prefix}/latest/",
+            }
+        except Exception as e:
+            logger.error("Model promotion failed: %s", e)
+            return {"promoted": False, "reason": str(e)}
+
     # ══════════════════════════════════════════════════════════════
     # INTERNAL HELPERS
     # ══════════════════════════════════════════════════════════════
@@ -577,7 +723,25 @@ class MLScoringService:
     def _build_training_set(
         self, db: Session, tenant_id: UUID
     ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
-        """Extract feature matrix X and target vector y from enriched threats."""
+        """
+        Extract feature matrix X and target vector y from enriched threats.
+
+        Label priority (Stage 1 improvement):
+        1. Real-world outcome from closed ActiveRisk records (ground truth)
+        2. Formula-generated likelihood_score (synthetic fallback)
+
+        Real outcomes are mapped to a 0-100 score so the same _bin_scores()
+        bucketing applies: materialized_breach→93, materialized_incident→72,
+        mitigated_successfully→25, accepted_no_incident→15, expired_unresolved→50
+        """
+        OUTCOME_SCORES = {
+            "materialized_breach":    93,
+            "materialized_incident":  72,
+            "expired_unresolved":     50,
+            "mitigated_successfully": 25,
+            "accepted_no_incident":   15,
+        }
+
         threats = (
             db.query(Threat)
             .filter(
@@ -587,6 +751,24 @@ class MLScoringService:
             .all()
         )
 
+        # Build outcome lookup from non-false-positive closed ActiveRisks
+        outcome_scores: Dict[str, int] = {}
+        active_risks = (
+            db.query(ActiveRisk)
+            .filter(
+                ActiveRisk.tenant_id == tenant_id,
+                ActiveRisk.outcome.isnot(None),
+                ActiveRisk.false_positive == False,
+            )
+            .all()
+        )
+        for ar in active_risks:
+            outcome_val = OUTCOME_SCORES.get(str(ar.outcome or ""), None)
+            if outcome_val is not None:
+                outcome_scores[str(ar.threat_id)] = outcome_val
+
+        real_outcome_count = 0
+        synthetic_count = 0
         X_rows: List[np.ndarray] = []
         y_rows: List[float] = []
         ids: List[str] = []
@@ -596,11 +778,34 @@ class MLScoringService:
             if not fv:
                 continue
             X_rows.append(_features_to_array(fv))
-            y_rows.append(float(t.likelihood_score or 0))  # type: ignore[arg-type]
-            ids.append(str(t.id))
+            threat_id_str = str(t.id)
+            if threat_id_str in outcome_scores:
+                y_rows.append(float(outcome_scores[threat_id_str]))
+                real_outcome_count += 1
+            else:
+                y_rows.append(float(t.likelihood_score or 0))  # type: ignore[arg-type]
+                synthetic_count += 1
+            ids.append(threat_id_str)
 
         if not X_rows:
             return np.empty((0, NUM_FEATURES)), np.empty(0), []
+
+        # Store training data quality info in meta (read back after train())
+        self._model_meta["real_outcome_samples"] = real_outcome_count
+        self._model_meta["synthetic_label_samples"] = synthetic_count
+        self._model_meta["using_real_outcomes"] = real_outcome_count > 0
+
+        if real_outcome_count < 50 and real_outcome_count > 0:
+            logger.warning(
+                "Only %d real-outcome samples available — model is partially synthetic. "
+                "Record more outcomes via PATCH /active-risks/{id}/outcome to improve accuracy.",
+                real_outcome_count,
+            )
+        elif real_outcome_count == 0:
+            logger.warning(
+                "No real-outcome data found — training on formula-generated labels. "
+                "Record outcomes via PATCH /active-risks/{id}/outcome to enable ground-truth training."
+            )
 
         return np.array(X_rows), np.array(y_rows), ids
 
