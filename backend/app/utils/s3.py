@@ -38,9 +38,15 @@ def generate_presigned_upload_url(
     """
     Generate a presigned PUT URL for direct client upload to S3.
 
-    Using PUT (not POST) keeps the request a simple binary PUT directly
-    to S3 from the browser — no multipart form overhead, no API-Gateway
-    proxy needed, and no 10 MB fan-out base64 limit.
+    ContentType is intentionally NOT included in the URL Params / signature.
+    Omitting it means:
+      - The browser does not need to send a Content-Type header.
+      - No custom header in the PUT request = simpler CORS preflight (method-only).
+      - Eliminates any risk of Content-Type value mismatch between the
+        signer and the browser (e.g. 'application/pdf' vs 'application/pdf;charset=utf-8').
+
+    The content type is stored in our own evidence table, so S3 metadata
+    is not needed for serving files correctly.
 
     Returns:
         Tuple of (presigned_put_url, {})  — empty dict signals PUT method
@@ -52,7 +58,8 @@ def generate_presigned_upload_url(
             Params={
                 'Bucket': settings.s3_bucket_evidence,
                 'Key': s3_key,
-                'ContentType': content_type,
+                # No ContentType — keeps the signature dependency-free so
+                # the browser PUT needs no custom headers at all.
             },
             ExpiresIn=expiration,
             HttpMethod='PUT',

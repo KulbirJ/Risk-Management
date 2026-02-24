@@ -200,26 +200,58 @@ class APIClient {
     const isPut = uploadMethod === 'PUT' || Object.keys(uploadFields).length === 0;
 
     if (isPut) {
-      // Presigned PUT: stream the binary directly to S3 — bypasses Lambda/API
-      // Gateway entirely, so there is no 6–10 MB proxy limit.
+      // Presigned PUT: stream binary body directly to S3.
+      // No Content-Type header is set intentionally — the presigned URL
+      // signature does NOT include ContentType, so sending the header is
+      // not required and omitting it avoids a CORS preflight mismatch.
       try {
         const response = await fetch(uploadUrl, {
           method: 'PUT',
           body: file,
           mode: 'cors',
-          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          // Deliberately no Content-Type header — keeps CORS preflight simple
+          // (method-only check) and avoids potential header mismatch 403 from S3.
         });
         if (!response.ok) {
-          const text = await response.text();
+          const text = await response.text().catch(() => '');
           throw new Error(`S3 upload failed (${response.status}): ${text}`);
         }
         return;
-      } catch (err: any) {
-        // Surface a clean error — do NOT fall back through proxy for PUT as
-        // large files will be rejected by API Gateway (base64 overhead).
+      } catch (putErr: any) {
+        // If the direct PUT failed and the file is small enough (<= 5 MB),
+        // fall back to the backend proxy. The proxy uses IAM credentials to
+        // put_object directly, bypassing CORS entirely. For files > 5 MB the
+        // proxy itself would exceed the API Gateway base64 limit, so skip it.
+        if (file.size <= 5 * 1024 * 1024) {
+          console.warn('Direct PUT failed, attempting proxy fallback:', putErr.message);
+          try {
+            // Extract the S3 key from the presigned URL path (everything after the host).
+            const s3Key = new URL(uploadUrl).pathname.slice(1); // strip leading /
+            const proxyForm = new FormData();
+            proxyForm.append('file', file);
+            proxyForm.append('s3_key', s3Key);
+            proxyForm.append('content_type', file.type || 'application/octet-stream');
+            const proxyResp = await this.client.post('/evidence/proxy-upload', proxyForm, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+              maxBodyLength: 5 * 1024 * 1024,
+            });
+            if (proxyResp.status >= 400) {
+              throw new Error(`Proxy upload failed (${proxyResp.status}). Please try again.`);
+            }
+            return;
+          } catch (proxyErr: any) {
+            throw new Error(
+              `Upload failed via both direct and proxy paths. ` +
+              `Direct: ${putErr.message}. Proxy: ${proxyErr.message}`,
+            );
+          }
+        }
+        // Large file — proxy is not an option. Give a clear actionable message.
         throw new Error(
           `Direct upload to cloud storage failed. ` +
-          `Please check your network connection and try again. (${err.message})`,
+          `This is usually a temporary network issue — please try again. ` +
+          `If the problem persists, check that your browser is not blocking ` +
+          `connections to amazonaws.com. (${putErr.message})`,
         );
       }
     }
