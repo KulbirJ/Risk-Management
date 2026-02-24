@@ -36,35 +36,27 @@ def generate_presigned_upload_url(
     expiration: int = 3600
 ) -> Tuple[str, dict]:
     """
-    Generate a presigned PUT URL for direct client upload to S3.
-
-    ContentType is intentionally NOT included in the URL Params / signature.
-    Omitting it means:
-      - The browser does not need to send a Content-Type header.
-      - No custom header in the PUT request = simpler CORS preflight (method-only).
-      - Eliminates any risk of Content-Type value mismatch between the
-        signer and the browser (e.g. 'application/pdf' vs 'application/pdf;charset=utf-8').
-
-    The content type is stored in our own evidence table, so S3 metadata
-    is not needed for serving files correctly.
+    Generate a presigned POST URL for direct client upload to S3.
 
     Returns:
-        Tuple of (presigned_put_url, {})  — empty dict signals PUT method
+        Tuple of (presigned_post_url, fields) for use in a multipart/form-data POST.
     """
     try:
+        max_size = settings.max_upload_size_mb * 1024 * 1024
         s3 = get_s3_client()
-        url = s3.generate_presigned_url(
-            'put_object',
-            Params={
-                'Bucket': settings.s3_bucket_evidence,
-                'Key': s3_key,
-                # No ContentType — keeps the signature dependency-free so
-                # the browser PUT needs no custom headers at all.
+        response = s3.generate_presigned_post(
+            Bucket=settings.s3_bucket_evidence,
+            Key=s3_key,
+            Fields={
+                'Content-Type': content_type,
             },
+            Conditions=[
+                {'Content-Type': content_type},
+                ['content-length-range', 1, max_size],
+            ],
             ExpiresIn=expiration,
-            HttpMethod='PUT',
         )
-        return url, {}  # empty fields → client knows to use PUT
+        return response['url'], response['fields']
 
     except ClientError as e:
         logger.error(f"Error generating presigned URL: {str(e)}")

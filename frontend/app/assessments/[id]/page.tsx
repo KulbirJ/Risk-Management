@@ -84,7 +84,7 @@ export default function AssessmentDetailPage() {
     'image/png',
     'image/jpeg',
   ];
-  const MAX_SIZE_MB = 50;
+  const MAX_SIZE_MB = 20;
 
   useEffect(() => {
     loadAssessmentData();
@@ -280,12 +280,12 @@ export default function AssessmentDetailPage() {
         const initResponse = await apiClient.initiateUpload(assessmentId, file);
 
         try {
-          // Step 2: Upload directly to S3 (PUT presigned URL bypasses Lambda)
+          // Step 2: Upload file directly to S3 via presigned POST
           await apiClient.uploadToS3(
             initResponse.upload_url,
             initResponse.upload_fields,
             file,
-            initResponse.upload_method ?? 'PUT',
+            initResponse.upload_method ?? 'POST',
           );
 
           // Step 3: Tell backend upload is complete → triggers parsing
