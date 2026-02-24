@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Printer, Shield, AlertTriangle, CheckCircle, TrendingUp, Globe, Cpu, Users, Target, ChevronRight, Activity } from 'lucide-react';
+import { ArrowLeft, Printer, Shield, AlertTriangle, CheckCircle, TrendingUp, Globe, Cpu, Users, Target, ChevronRight, Activity, BookOpen } from 'lucide-react';
 import apiClient from '../../../../lib/api-client';
 import type { AssessmentReport, ThreatReportItem } from '../../../../lib/types';
 
@@ -454,6 +454,311 @@ function ThreatCard({ threat, index }: { threat: ThreatReportItem; index: number
   );
 }
 
+// ─── Definitions Appendix ──────────────────────────────────────────────────
+
+const GLOSSARY: Array<{ term: string; category: string; definition: string }> = [
+  // Risk & Threat concepts
+  {
+    term: 'Threat',
+    category: 'Risk',
+    definition:
+      'Any circumstance or event with the potential to adversely impact organisational operations, assets, or individuals through unauthorised access, destruction, disclosure, modification of information, or denial of service.',
+  },
+  {
+    term: 'Risk',
+    category: 'Risk',
+    definition:
+      'The potential for loss or harm resulting from the likelihood of a threat exploiting a vulnerability, combined with the impact that exploitation would cause.',
+  },
+  {
+    term: 'Severity',
+    category: 'Risk',
+    definition:
+      'A composite rating (Low / Medium / High / Critical) computed from the intersection of a threat\'s Likelihood and Impact scores. Critical indicates maximum urgency.',
+  },
+  {
+    term: 'Likelihood',
+    category: 'Risk',
+    definition:
+      'The probability that a given threat will be exploited within a defined period. Rated Low, Medium, High, or Critical based on threat intelligence, historical data, and ML analysis.',
+  },
+  {
+    term: 'Impact',
+    category: 'Risk',
+    definition:
+      'The potential business and operational consequences if a threat is successfully exploited — considering data loss, financial damage, regulatory penalties, and reputational harm.',
+  },
+  {
+    term: 'Residual Risk',
+    category: 'Risk',
+    definition:
+      'The risk that remains after all mitigation controls have been applied. Residual risk is accepted, transferred (e.g. via insurance), or subject to further treatment.',
+  },
+  {
+    term: 'Active Risk',
+    category: 'Risk',
+    definition:
+      'A threat that has been escalated to the risk register because it cannot be immediately fully mitigated. Active risks are tracked with an owner, review cycle, and estimated persistence.',
+  },
+  // ML & Scoring
+  {
+    term: 'ML Risk Score',
+    category: 'ML & Scoring',
+    definition:
+      'A machine-learning-derived integer from 0–100 representing the estimated likelihood of exploitation for a specific threat. Trained on historical threat outcomes within the tenant and enriched with external intelligence signals (CVSS, CISA KEV, OTX, sector frequency, ATT&CK group activity). Scores ≥75 = Critical, 50–74 = High, 25–49 = Medium, <25 = Low.',
+  },
+  {
+    term: 'ML Likelihood Drivers',
+    category: 'ML & Scoring',
+    definition:
+      'The individual features that contributed most to a threat\'s ML Risk Score — e.g. cvss_score, exploit_public, sector_percentile. Each driver shows its relative weight so analysts can audit and challenge the model\'s conclusions.',
+  },
+  {
+    term: 'Feature Vector',
+    category: 'ML & Scoring',
+    definition:
+      'The normalised numeric representation of a threat used as model input. Combines CVE severity, exploit availability, sector frequency, OTX pulse count, ATT&CK group count, and other signals into a single vector for the ML model.',
+  },
+  {
+    term: 'Estimated Persistence',
+    category: 'ML & Scoring',
+    definition:
+      'A survival-analysis estimate (in days) of how long an active risk is likely to remain unresolved given the organisation\'s historical remediation patterns, sector benchmarks, and severity tier.',
+  },
+  // Intelligence & Enrichment
+  {
+    term: 'Enrichment',
+    category: 'Intelligence',
+    definition:
+      'The automated process of augmenting a threat record with external intelligence data from multiple sources (NVD, CISA KEV, AlienVault OTX, GitHub, sector frequency databases, MITRE ATT&CK). Enriched threats have the intel_enriched flag set to true.',
+  },
+  {
+    term: 'NVD (National Vulnerability Database)',
+    category: 'Intelligence',
+    definition:
+      'The U.S. government repository of vulnerability management data (NIST). Provides CVSS scores, CWE classifications, and remediation guidance for publicly disclosed CVEs.',
+  },
+  {
+    term: 'CVE (Common Vulnerabilities and Exposures)',
+    category: 'Intelligence',
+    definition:
+      'A globally unique identifier assigned to a publicly disclosed cybersecurity vulnerability. Format: CVE-YYYY-NNNNN. Maintained by MITRE and published in the NVD.',
+  },
+  {
+    term: 'CVSS (Common Vulnerability Scoring System)',
+    category: 'Intelligence',
+    definition:
+      'An open standard for rating the severity of software vulnerabilities on a scale of 0.0–10.0. A score ≥9.0 is Critical; 7.0–8.9 High; 4.0–6.9 Medium; <4.0 Low.',
+  },
+  {
+    term: 'CISA KEV',
+    category: 'Intelligence',
+    definition:
+      'CISA\'s Known Exploited Vulnerabilities catalogue — a list of CVEs that have been actively exploited in the wild. US federal agencies must patch KEV entries within mandated timeframes. Presence on KEV is a strong signal of elevated real-world risk.',
+  },
+  {
+    term: 'AlienVault OTX',
+    category: 'Intelligence',
+    definition:
+      'Open Threat Exchange — a global threat intelligence sharing community operated by AT&T Cybersecurity. OTX Pulses are crowd-sourced threat reports linking indicators of compromise (IoCs) and TTPs to specific threats or CVEs.',
+  },
+  {
+    term: 'GitHub PoC (Proof of Concept)',
+    category: 'Intelligence',
+    definition:
+      'Publicly available exploit code or proof-of-concept repositories hosted on GitHub that demonstrate how a specific vulnerability can be exploited. Existence of a public PoC significantly raises a threat\'s exploitability rating.',
+  },
+  {
+    term: 'Sector Frequency',
+    category: 'Intelligence',
+    definition:
+      'The annualised rate of a specific threat type occurring across organisations in a given industry sector, expressed as incidents per 1,000 organisations per year. Derived from Verizon DBIR, IBM X-Force, and ENISA annual reports. Used to contextualise whether a threat is above or below the sector average.',
+  },
+  {
+    term: 'Sector Percentile',
+    category: 'Intelligence',
+    definition:
+      'The relative position of a threat\'s incident frequency compared to all other threat types in the same sector. A 90th-percentile threat occurs more frequently than 90% of all threats tracked in that sector.',
+  },
+  // ATT&CK & Kill Chain
+  {
+    term: 'MITRE ATT&CK',
+    category: 'ATT&CK & Kill Chain',
+    definition:
+      'A globally accessible, curated knowledge base of adversary tactics, techniques, and procedures (TTPs) based on real-world observations. The Enterprise matrix covers 14 tactics and 700+ techniques across Windows, macOS, Linux, cloud, and network environments.',
+  },
+  {
+    term: 'Tactic',
+    category: 'ATT&CK & Kill Chain',
+    definition:
+      'The adversary\'s tactical goal — the "why" of an ATT&CK technique. The 14 Enterprise tactics range from Reconnaissance through to Impact, following the logical progression of an attack.',
+  },
+  {
+    term: 'Technique',
+    category: 'ATT&CK & Kill Chain',
+    definition:
+      'A specific method an adversary uses to achieve a tactical goal. Identified by a MITRE ID (e.g. T1566 — Phishing). Sub-techniques (e.g. T1566.001) refine the parent technique further.',
+  },
+  {
+    term: 'ATT&CK Technique Mapping',
+    category: 'ATT&CK & Kill Chain',
+    definition:
+      'An association between a threat in this assessment and one or more MITRE ATT&CK techniques. Mappings can be AI-suggested (auto-mapped) or manually curated by analysts. Each mapping carries a confidence score (0–100%).',
+  },
+  {
+    term: 'Kill Chain',
+    category: 'ATT&CK & Kill Chain',
+    definition:
+      'An AI-generated scenario modelling the staged progression of an attack from initial access through to impact. Each stage maps to a MITRE ATT&CK tactic and technique, includes the attacker\'s likely behaviour, and provides a detection hint for defenders. Modelled on the Lockheed Martin Cyber Kill Chain® and MITRE ATT&CK framework.',
+  },
+  {
+    term: 'Kill Chain Stage',
+    category: 'ATT&CK & Kill Chain',
+    definition:
+      'An individual step within a kill chain scenario — e.g. "Stage 2: Persistence via Scheduled Task (T1053.005)". Each stage describes what the attacker does (Actor Behavior) and how defenders can detect or disrupt it (Detection Hint).',
+  },
+  {
+    term: 'Threat Actor / APT Group',
+    category: 'ATT&CK & Kill Chain',
+    definition:
+      'A named adversary group tracked by the security community, catalogued in MITRE ATT&CK as an Intrusion Set. Examples include APT29 (Cozy Bear, Russia), FIN7 (financially motivated), and Lazarus Group (North Korea). Groups are associated with the techniques they are known to use.',
+  },
+  {
+    term: 'Intrusion Set (STIX)',
+    category: 'ATT&CK & Kill Chain',
+    definition:
+      'The STIX 2.1 object type used in MITRE\'s CTI (Cyber Threat Intelligence) repository to represent a threat actor group and their attributed campaigns, tools, and techniques.',
+  },
+  // Platform
+  {
+    term: 'Assessment',
+    category: 'Platform',
+    definition:
+      'A scoped risk evaluation exercise tied to a specific system, project, or organisational unit. An assessment contains one or more identified threats, associated evidence, recommendations, and an overall risk posture.',
+  },
+  {
+    term: 'Threat Catalogue',
+    category: 'Platform',
+    definition:
+      'A pre-defined library of canonical threat types (e.g. ransomware, social engineering, denial of service) with standard descriptions, default likelihood/impact ratings, and sector frequency mappings. Threats in an assessment reference catalogue entries via a catalogue_key.',
+  },
+  {
+    term: 'Recommendation',
+    category: 'Platform',
+    definition:
+      'A specific mitigation, remediation, or compensating control action assigned to a threat or assessment. Recommendations carry a priority, status (open / in progress / done), and optionally an owner and target date.',
+  },
+  {
+    term: 'Evidence',
+    category: 'Platform',
+    definition:
+      'Uploaded supporting artefacts (architecture diagrams, vulnerability scan reports, policy documents, etc.) attached to an assessment or individual threat. Evidence is parsed and fed into AI enrichment to improve the accuracy of threat analysis.',
+  },
+  {
+    term: 'Audit Log',
+    category: 'Platform',
+    definition:
+      'An immutable, append-only record of every significant action taken within the platform (e.g. threat created, risk accepted, recommendation updated). Used for compliance evidence, change tracking, and forensic investigation.',
+  },
+  {
+    term: 'Tenant',
+    category: 'Platform',
+    definition:
+      'A logically isolated organisational unit within the platform. All assessments, threats, users, and intelligence data are scoped to a single tenant, ensuring data segregation in multi-organisation deployments.',
+  },
+];
+
+const GLOSSARY_CATEGORIES = [...new Set(GLOSSARY.map(g => g.category))];
+
+function DefinitionsAppendix() {
+  return (
+    <section className="print-section mt-12">
+      <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2">
+        <BookOpen className="w-5 h-5 text-gray-600" />
+        Appendix — Definitions & Glossary
+      </h2>
+      <p className="text-sm text-gray-500 mb-6">
+        Reference definitions for all key terms, ratings, and data sources used throughout this report.
+      </p>
+
+      {GLOSSARY_CATEGORIES.map(cat => (
+        <div key={cat} className="mb-8">
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 pb-1 border-b border-gray-100">
+            {cat}
+          </h3>
+          <dl className="space-y-4">
+            {GLOSSARY.filter(g => g.category === cat).map(g => (
+              <div key={g.term} className="grid grid-cols-1 sm:grid-cols-4 gap-1 sm:gap-4">
+                <dt className="sm:col-span-1 text-sm font-semibold text-gray-800 pt-0.5">{g.term}</dt>
+                <dd className="sm:col-span-3 text-sm text-gray-600 leading-relaxed">{g.definition}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ))}
+
+      {/* Severity rating reference table */}
+      <div className="mb-8">
+        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 pb-1 border-b border-gray-100">
+          Severity & Score Reference
+        </h3>
+        <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+          <thead className="bg-gray-50">
+            <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <th className="px-4 py-2">Rating</th>
+              <th className="px-4 py-2">ML Score Range</th>
+              <th className="px-4 py-2">CVSS Equivalent</th>
+              <th className="px-4 py-2">Recommended Response Time</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            <tr>
+              <td className="px-4 py-2"><span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200 uppercase">Critical</span></td>
+              <td className="px-4 py-2 font-mono text-gray-700">75 – 100</td>
+              <td className="px-4 py-2 text-gray-600">9.0 – 10.0</td>
+              <td className="px-4 py-2 text-gray-600">Immediate — within 24–72 hours</td>
+            </tr>
+            <tr>
+              <td className="px-4 py-2"><span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 border border-orange-200 uppercase">High</span></td>
+              <td className="px-4 py-2 font-mono text-gray-700">50 – 74</td>
+              <td className="px-4 py-2 text-gray-600">7.0 – 8.9</td>
+              <td className="px-4 py-2 text-gray-600">Short-term — within 7–14 days</td>
+            </tr>
+            <tr>
+              <td className="px-4 py-2"><span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-200 uppercase">Medium</span></td>
+              <td className="px-4 py-2 font-mono text-gray-700">25 – 49</td>
+              <td className="px-4 py-2 text-gray-600">4.0 – 6.9</td>
+              <td className="px-4 py-2 text-gray-600">Planned — within 30–60 days</td>
+            </tr>
+            <tr>
+              <td className="px-4 py-2"><span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-200 uppercase">Low</span></td>
+              <td className="px-4 py-2 font-mono text-gray-700">0 – 24</td>
+              <td className="px-4 py-2 text-gray-600">0.1 – 3.9</td>
+              <td className="px-4 py-2 text-gray-600">Backlog — next review cycle</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Sources & References */}
+      <div>
+        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 pb-1 border-b border-gray-100">
+          Data Sources & References
+        </h3>
+        <ul className="space-y-1.5 text-sm text-gray-600">
+          <li><strong>MITRE ATT&CK Enterprise:</strong> attack.mitre.org — adversary tactics, techniques &amp; groups</li>
+          <li><strong>NVD (NIST):</strong> nvd.nist.gov — CVE details and CVSS scores</li>
+          <li><strong>CISA KEV:</strong> cisa.gov/known-exploited-vulnerabilities-catalog — actively exploited vulnerabilities</li>
+          <li><strong>AlienVault OTX:</strong> otx.alienvault.com — open threat exchange pulses and IoCs</li>
+          <li><strong>GitHub Advisory / PoC:</strong> github.com/search — public proof-of-concept exploit repositories</li>
+          <li><strong>Verizon DBIR, IBM X-Force, ENISA Threat Landscape:</strong> sector frequency baseline data</li>
+          <li><strong>STIX 2.1 / TAXII 2.1:</strong> OASIS open standards for structured threat intelligence exchange</li>
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 // ─── Main Report Page ───────────────────────────────────────────────────────
 
 export default function AssessmentReportPage() {
@@ -685,6 +990,11 @@ export default function AssessmentReportPage() {
               </div>
             )}
           </section>
+
+          {/* ═══════════════════════════════════════════════════════════
+              APPENDIX — DEFINITIONS & GLOSSARY
+          ════════════════════════════════════════════════════════════ */}
+          <DefinitionsAppendix />
 
           {/* Footer */}
           <div className="mt-12 pt-6 border-t border-gray-200 text-center text-xs text-gray-400 print:mt-4">
