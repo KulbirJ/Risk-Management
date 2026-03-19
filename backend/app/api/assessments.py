@@ -252,8 +252,9 @@ def trigger_full_assessment(
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found")
 
-    # Auto-expire stuck full-run jobs older than 5 minutes
-    stuck_cutoff = datetime.utcnow() - timedelta(minutes=5)
+    # Auto-expire stuck full-run jobs older than 30 minutes
+    # (legitimate pipelines can take 10-15 min; Lambda max timeout is 15 min)
+    stuck_cutoff = datetime.utcnow() - timedelta(minutes=30)
     for sj in db.query(IntelligenceJob).filter(
         IntelligenceJob.assessment_id == assessment_id,
         IntelligenceJob.job_type == "full_assessment_run",
@@ -333,6 +334,24 @@ def trigger_full_assessment(
                     tenant_id=str(tenant_id),
                     user_id=str(user_id),
                 )
+            except Exception as _bg_exc:
+                import logging as _log
+                _log.getLogger(__name__).error(
+                    "[FULL_RUN] Background thread failed for job=%s: %s", job_id_str, _bg_exc
+                )
+                try:
+                    from ..models.models import IntelligenceJob
+                    from datetime import datetime as _dt
+                    _j = bg_db.query(IntelligenceJob).filter(
+                        IntelligenceJob.id == job_id_str
+                    ).first()
+                    if _j and _j.status in ("pending", "running"):
+                        _j.status = "failed"
+                        _j.error_message = f"Background thread error: {str(_bg_exc)[:500]}"
+                        _j.completed_at = _dt.utcnow()
+                        bg_db.commit()
+                except Exception:
+                    pass
             finally:
                 bg_db.close()
 

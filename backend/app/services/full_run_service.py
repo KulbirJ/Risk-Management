@@ -106,6 +106,26 @@ def run_full_assessment_pipeline(
         _logger.error("[FULL_RUN] Job %s not found", job_id)
         return {"status": "error", "message": "Job not found"}
 
+    try:
+        return _run_pipeline_body(db, job, job_id, assessment_id, tenant_id, user_id, _logger)
+    except Exception as exc:
+        _logger.error("[FULL_RUN] Unhandled exception for job=%s: %s\n%s",
+                      job_id, exc, traceback.format_exc())
+        try:
+            job.status = "failed"
+            job.error_message = f"Unexpected pipeline error: {str(exc)[:500]}"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+        except Exception:
+            pass
+        return {"status": "failed", "job_id": job_id}
+
+
+def _run_pipeline_body(db, job, job_id, assessment_id, tenant_id, user_id, _logger):
+    """Inner pipeline body — separated so the caller can wrap it in a clean try/except."""
+    from ..models.models import IntelligenceJob, Threat, ThreatAttackMapping  # noqa: F401
+    from ..services.intelligence_service import intelligence_service
+
     # Mark job running
     job.status = "running"
     job.started_at = datetime.utcnow()

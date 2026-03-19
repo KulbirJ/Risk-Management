@@ -662,6 +662,22 @@ try:
                 db.close()
         except Exception as exc:
             _logger.error("[FULL_RUN] Fatal error: %s\n%s", exc, traceback.format_exc())
+            # Best-effort: mark the job as failed so it doesn't stay stuck at "running"
+            try:
+                from .db.database import SessionLocal
+                from .models.models import IntelligenceJob
+                _db = SessionLocal()
+                try:
+                    _job = _db.query(IntelligenceJob).filter(IntelligenceJob.id == job_id).first()
+                    if _job and _job.status in ("pending", "running"):
+                        _job.status = "failed"
+                        _job.error_message = f"Fatal pipeline error: {str(exc)[:500]}"
+                        _job.completed_at = datetime.utcnow()
+                        _db.commit()
+                finally:
+                    _db.close()
+            except Exception:
+                pass
             return {"statusCode": 500, "body": f"Full assessment run failed: {exc}"}
 
     def lambda_handler(event, context):

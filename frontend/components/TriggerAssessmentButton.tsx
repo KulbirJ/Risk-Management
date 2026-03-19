@@ -42,12 +42,41 @@ export function TriggerAssessmentButton({ assessmentId, onComplete }: TriggerAss
   const [jobId, setJobId]           = useState<string | null>(null);
   const [job, setJob]               = useState<IntelligenceJob | null>(null);
   const [error, setError]           = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const results: FullRunResults | null = (job?.results as FullRunResults) ?? null;
   const percent  = results?.percent_complete ?? 0;
   const steps: FullRunStep[] = results?.steps ?? [];
   const isDone   = job?.status === 'completed' || job?.status === 'failed';
+
+  // Detect a job that has been in pending/running state for >10 minutes
+  const isStuck = !isDone && !!job && !!job.started_at &&
+    (Date.now() - new Date(job.started_at).getTime()) > 10 * 60 * 1000;
+
+  // ── On mount: reconnect to any in-progress job ───────────────────
+  // If the user refreshed the page mid-run, pick up where we left off.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const jobs = await apiClient.getIntelligenceJobs({
+          assessment_id: assessmentId,
+          limit: 1,
+        });
+        if (cancelled) return;
+        const latest = jobs[0];
+        if (latest && (latest.status === 'running' || latest.status === 'pending')) {
+          setJob(latest);
+          setJobId(latest.id);
+          // Don't auto-open the modal on reconnect — just resume polling silently
+        }
+      } catch {
+        // Non-critical: if this fails, user can still trigger manually
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [assessmentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Polling ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -74,6 +103,24 @@ export function TriggerAssessmentButton({ assessmentId, onComplete }: TriggerAss
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [jobId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Force-reset stuck job ────────────────────────────────────────
+  const handleForceReset = async () => {
+    setIsResetting(true);
+    try {
+      await apiClient.resetIntelligenceJobs(assessmentId);
+      // Clear local state so the user can trigger a fresh run
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      setJob(null);
+      setJobId(null);
+      setError(null);
+      setIsOpen(false);
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? 'Reset failed — try again.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   // ── Trigger ──────────────────────────────────────────────────────
   const handleTrigger = async () => {
@@ -112,19 +159,50 @@ export function TriggerAssessmentButton({ assessmentId, onComplete }: TriggerAss
   // ── Render ───────────────────────────────────────────────────────
   return (
     <>
-      {/* ── Trigger button ── */}
-      <button
-        onClick={handleTrigger}
-        disabled={isLaunching}
-        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 text-white
-                   text-sm font-semibold shadow-md hover:bg-indigo-700 active:bg-indigo-800
-                   disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-      >
-        {isLaunching
-          ? <Loader2 className="w-4 h-4 animate-spin" />
-          : <Zap className="w-4 h-4" />}
-        {isLaunching ? 'Starting…' : 'Trigger Assessment'}
-      </button>
+      {/* ── Trigger button / stuck indicator ── */}
+      <div className="inline-flex items-center gap-2">
+        <button
+          onClick={handleTrigger}
+          disabled={isLaunching || (!isDone && !!jobId && !isStuck)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 text-white
+                     text-sm font-semibold shadow-md hover:bg-indigo-700 active:bg-indigo-800
+                     disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+        >
+          {isLaunching
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <Zap className="w-4 h-4" />}
+          {isLaunching ? 'Starting…' : 'Trigger Assessment'}
+        </button>
+
+        {/* Stuck-job badge + force-reset button — only visible when running >10 min */}
+        {isStuck && (
+          <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50
+                           border border-amber-200 rounded-lg px-3 py-2">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+            Last run: running
+            <button
+              onClick={handleForceReset}
+              disabled={isResetting}
+              className="ml-1 font-semibold underline hover:text-amber-900 disabled:opacity-50"
+              title="Reset the stuck job so you can trigger a fresh run"
+            >
+              {isResetting ? 'Resetting…' : 'Reset'}
+            </button>
+          </span>
+        )}
+
+        {/* Non-stuck running badge — lets user re-open the progress modal */}
+        {!isDone && !!jobId && !isStuck && (
+          <button
+            onClick={() => setIsOpen(true)}
+            className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50
+                       border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-100 transition-colors"
+          >
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+            Last run: running
+          </button>
+        )}
+      </div>
 
       {/* ── Modal ── */}
       {isOpen && (
@@ -151,6 +229,8 @@ export function TriggerAssessmentButton({ assessmentId, onComplete }: TriggerAss
                       ? job?.status === 'completed'
                         ? 'All steps completed — reloading results…'
                         : 'Finished with some errors (completed steps were saved)'
+                      : isStuck
+                      ? 'Pipeline appears stuck — you can force-reset it below'
                       : jobId
                       ? 'Pipeline is running — please wait…'
                       : 'Starting pipeline…'}
@@ -160,10 +240,10 @@ export function TriggerAssessmentButton({ assessmentId, onComplete }: TriggerAss
 
               <button
                 onClick={handleClose}
-                disabled={!isDone && !!jobId}
+                disabled={!isDone && !!jobId && !isStuck}
                 className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100
                            disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                title={!isDone && !!jobId ? 'Cannot close while running' : 'Close'}
+                title={!isDone && !!jobId && !isStuck ? 'Cannot close while running' : 'Close'}
                 aria-label="Close"
               >
                 <X className="w-4 h-4" />
@@ -263,19 +343,31 @@ export function TriggerAssessmentButton({ assessmentId, onComplete }: TriggerAss
                 )}
                 {!isDone && jobId && (
                   <span className="text-gray-400 italic">
-                    AI and ML steps may take a few minutes…
+                    {isStuck ? 'Job appears stuck — use Reset to start fresh.' : 'AI and ML steps may take a few minutes…'}
                   </span>
                 )}
               </p>
 
-              <button
-                onClick={handleClose}
-                disabled={!isDone && !!jobId}
-                className="ml-4 px-4 py-1.5 rounded-lg text-sm font-medium text-gray-600
-                           hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                {isDone ? 'Close' : 'Running…'}
-              </button>
+              <div className="ml-4 flex items-center gap-2">
+                {isStuck && (
+                  <button
+                    onClick={handleForceReset}
+                    disabled={isResetting}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium text-amber-700 bg-amber-50
+                               border border-amber-200 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                  >
+                    {isResetting ? 'Resetting…' : 'Force Reset'}
+                  </button>
+                )}
+                <button
+                  onClick={handleClose}
+                  disabled={!isDone && !!jobId && !isStuck}
+                  className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-600
+                             hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isDone ? 'Close' : isStuck ? 'Close' : 'Running…'}
+                </button>
+              </div>
             </div>
 
           </div>
