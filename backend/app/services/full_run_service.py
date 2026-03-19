@@ -72,19 +72,33 @@ def _commit_results(db: Any, job: Any, results: dict) -> None:
     """
     Flush results to DB.
 
-    Rolls back any open/failed transaction first so a preceding exception
-    (e.g. an FK-violation inside a step's DB work) cannot permanently
-    invalidate the session and block subsequent progress writes.
+    Tries to commit directly.  If a prior DB error left the session in an
+    invalid (rollback-only) state the commit will fail; in that case we roll
+    back to clear the bad transaction, re-assign, and retry once.  This means
+    subsequent progress writes always succeed even after a step threw an
+    IntegrityError (e.g., an FK violation during _clear_ai_generated_data).
+
+    NOTE: do NOT call db.rollback() unconditionally before assigning — that
+    would discard any dirty attributes (like job.status) that were set on the
+    job object by the caller just before calling this function.
     """
+    def _assign() -> None:
+        job.results = {
+            "steps": [dict(s) for s in results["steps"]],
+            "percent_complete": results["percent_complete"],
+        }
+
+    _assign()
     try:
-        db.rollback()  # no-op if session is clean; recovers an invalid tx if not
+        db.commit()
     except Exception:
-        pass
-    job.results = {
-        "steps": [dict(s) for s in results["steps"]],
-        "percent_complete": results["percent_complete"],
-    }
-    db.commit()
+        # Session is in an invalid state — roll back, re-assign, and retry.
+        try:
+            db.rollback()
+            _assign()
+            db.commit()
+        except Exception:
+            pass
 
 
 # ─────────────────────────────────────────────────────────────────
