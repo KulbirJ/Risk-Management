@@ -69,7 +69,17 @@ def _set_step(results: dict, step_name: str, status: str, message: str, percent:
 
 
 def _commit_results(db: Any, job: Any, results: dict) -> None:
-    """Flush results to DB.  Makes a shallow copy to trigger SQLAlchemy dirty-tracking on JSONB."""
+    """
+    Flush results to DB.
+
+    Rolls back any open/failed transaction first so a preceding exception
+    (e.g. an FK-violation inside a step's DB work) cannot permanently
+    invalidate the session and block subsequent progress writes.
+    """
+    try:
+        db.rollback()  # no-op if session is clean; recovers an invalid tx if not
+    except Exception:
+        pass
     job.results = {
         "steps": [dict(s) for s in results["steps"]],
         "percent_complete": results["percent_complete"],
@@ -113,6 +123,7 @@ def run_full_assessment_pipeline(
         _logger.error("[FULL_RUN] Unhandled exception for job=%s: %s\n%s",
                       job_id, exc, traceback.format_exc())
         try:
+            db.rollback()  # recover session from any invalid transaction state
             job.status = "failed"
             job.error_message = f"Unexpected pipeline error: {str(exc)[:500]}"
             job.completed_at = datetime.utcnow()

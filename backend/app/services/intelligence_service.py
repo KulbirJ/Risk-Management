@@ -9,7 +9,10 @@ import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from sqlalchemy.orm import Session
-from ..models.models import Assessment, Threat, Recommendation, ThreatCatalogue, Evidence, IntelligenceJob
+from ..models.models import (
+    Assessment, Threat, Recommendation, ThreatCatalogue, Evidence, IntelligenceJob,
+    ThreatAttackMapping, KillChain, ActiveRisk, ThreatIntelEnrichment,
+)
 from ..services.bedrock_service import bedrock_service
 from ..core.config import settings
 
@@ -229,8 +232,22 @@ class IntelligenceService:
     def _clear_ai_generated_data(
         self, db: Session, assessment_id: str, tenant_id: str
     ) -> Dict[str, int]:
-        """Delete all AI-generated threats and recommendations for the assessment."""
-        # Find AI-generated threat IDs so we can clean up linked recommendations
+        """
+        Delete all AI-generated threats and every record that FK-references them.
+
+        Bulk DELETE (query.delete) bypasses ORM cascade rules — it sends SQL directly
+        to PostgreSQL, which enforces FK constraints and will raise an IntegrityError
+        if any referencing row still exists.  So we must delete children BEFORE parents,
+        in FK-dependency order:
+
+          ThreatAttackMapping -> Threat
+          KillChain           -> Threat  (KillChainStage cascades from KillChain via ORM)
+          ThreatIntelEnrichment -> Threat
+          ActiveRisk          -> Threat
+          Recommendation      -> Threat
+          Threat              (safe to delete now)
+        """
+        # Collect AI-threat IDs once; used in all child deletes.
         ai_threat_ids = [
             t.id for t in db.query(Threat.id).filter(
                 Threat.assessment_id == assessment_id,
@@ -239,21 +256,58 @@ class IntelligenceService:
             ).all()
         ]
 
-        rec_count = 0
-        if ai_threat_ids:
-            # Delete recommendations linked to AI threats
-            rec_count = db.query(Recommendation).filter(
-                Recommendation.threat_id.in_(ai_threat_ids),
+        if not ai_threat_ids:
+            # Also clean up orphaned AI recommendations (defensive)
+            db.query(Recommendation).filter(
+                Recommendation.assessment_id == assessment_id,
+                Recommendation.tenant_id == tenant_id,
+                Recommendation.ai_generated == True,
+            ).delete(synchronize_session="fetch")
+            db.commit()
+            return {"threats": 0, "recommendations": 0}
+
+        # 1. ATT&CK mappings
+        db.query(ThreatAttackMapping).filter(
+            ThreatAttackMapping.threat_id.in_(ai_threat_ids)
+        ).delete(synchronize_session="fetch")
+
+        # 2. Kill chains (KillChainStage rows will be removed by ORM cascade
+        #    when the KillChain objects are expunged from session on commit)
+        kill_chain_ids = [
+            kc.id for kc in db.query(KillChain.id).filter(
+                KillChain.threat_id.in_(ai_threat_ids)
+            ).all()
+        ]
+        if kill_chain_ids:
+            from ..models.models import KillChainStage
+            db.query(KillChainStage).filter(
+                KillChainStage.kill_chain_id.in_(kill_chain_ids)
+            ).delete(synchronize_session="fetch")
+            db.query(KillChain).filter(
+                KillChain.id.in_(kill_chain_ids)
             ).delete(synchronize_session="fetch")
 
-        # Also delete any other AI-generated recommendations for this assessment
+        # 3. Threat-intel enrichment cache
+        db.query(ThreatIntelEnrichment).filter(
+            ThreatIntelEnrichment.threat_id.in_(ai_threat_ids)
+        ).delete(synchronize_session="fetch")
+
+        # 4. Active risks linked to AI threats
+        db.query(ActiveRisk).filter(
+            ActiveRisk.threat_id.in_(ai_threat_ids)
+        ).delete(synchronize_session="fetch")
+
+        # 5. Recommendations (by threat_id AND any loose ai_generated ones)
+        rec_count = db.query(Recommendation).filter(
+            Recommendation.threat_id.in_(ai_threat_ids),
+        ).delete(synchronize_session="fetch")
         rec_count += db.query(Recommendation).filter(
             Recommendation.assessment_id == assessment_id,
             Recommendation.tenant_id == tenant_id,
             Recommendation.ai_generated == True,
         ).delete(synchronize_session="fetch")
 
-        # Delete the AI threats themselves
+        # 6. Now safe to delete the threats themselves
         threat_count = db.query(Threat).filter(
             Threat.assessment_id == assessment_id,
             Threat.tenant_id == tenant_id,
