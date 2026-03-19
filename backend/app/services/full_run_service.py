@@ -3,12 +3,14 @@ Full Assessment Run Service
 ===========================
 Orchestrates the complete risk-assessment pipeline in a single background job:
 
-  Step 1  AI Risk Enrichment          — extract threats via Bedrock
-  Step 2  Intel Threat Enrichment     — CVE / ATT&CK group / sector-frequency
-  Step 3  ML Risk Scoring             — predict likelihood with trained model
-  Step 4  Threat Clustering           — DBSCAN cluster grouping
-  Step 5  ATT&CK Auto-Mapping         — AI-suggest + save technique mappings
-  Step 6  Attack Scenarios            — generate kill-chain narratives
+  Step 1  AI Risk Enrichment        — extract threats via Bedrock
+  Step 2  Intel Threat Enrichment   — CVE / ATT&CK group / sector-frequency
+  Step 3  ML Risk Scoring           — predict likelihood with trained model
+  Step 4  Threat Clustering         — DBSCAN cluster grouping
+  Step 5  ATT&CK Auto-Mapping       — AI-suggest + save technique mappings
+
+Attack Scenarios (Kill Chains) are NOT run automatically — analysts generate
+them manually per-threat from the Threat detail view.
 
 Progress is persisted in IntelligenceJob.results so the frontend can poll it.
 """
@@ -28,12 +30,11 @@ logger = logging.getLogger(__name__)
 # Step definitions  (name, display-label, target % when done)
 # ─────────────────────────────────────────────────────────────────
 FULL_RUN_STEPS = [
-    ("ai_enrichment",  "AI Risk Enrichment",             17),
-    ("intel_threats",  "Intel Threat Enrichment",        33),
-    ("ml_scoring",     "ML Risk Scoring",                50),
-    ("clustering",     "Threat Clustering",              65),
-    ("attack_mapping", "ATT\u0026CK Auto-Mapping",       82),
-    ("kill_chains",    "Attack Scenarios (Kill Chains)", 97),
+    ("ai_enrichment",  "AI Risk Enrichment",       20),
+    ("intel_threats",  "Intel Threat Enrichment",  40),
+    ("ml_scoring",     "ML Risk Scoring",          60),
+    ("clustering",     "Threat Clustering",        80),
+    ("attack_mapping", "ATT\u0026CK Auto-Mapping", 100),
 ]
 
 
@@ -274,43 +275,11 @@ def _run_pipeline_body(db, job, job_id, assessment_id, tenant_id, user_id, _logg
                 _logger.debug("[FULL_RUN] auto_map %s: %s", t.id, exc_t)
         total = len(threat_rows)
         _set_step(results, "attack_mapping", "completed",
-                  f"{mapped}/{total} threat{'s' if total != 1 else ''} mapped to ATT&CK techniques", 82)
+                  f"{mapped}/{total} threat{'s' if total != 1 else ''} mapped to ATT&CK techniques", 100)
         _logger.info("[FULL_RUN] Step attack_mapping done: %s/%s", mapped, total)
     except Exception as exc:
-        _set_step(results, "attack_mapping", "failed", str(exc)[:200], 82)
+        _set_step(results, "attack_mapping", "failed", str(exc)[:200], 100)
         _logger.warning("[FULL_RUN] attack_mapping failed (continuing): %s", exc)
-    _commit_results(db, job, results)
-
-    # ── Step 6: Kill Chain (Attack Scenarios) ─────────────────────
-    _set_step(results, "kill_chains", "running", "Generating attack scenario narratives…")
-    _commit_results(db, job, results)
-    try:
-        from .kill_chain_service import kill_chain_service
-        threat_rows = db.query(Threat).filter(
-            Threat.assessment_id == aid,
-            Threat.tenant_id == tid,
-        ).all()
-        generated = 0
-        for t in threat_rows:
-            has_mappings = db.query(ThreatAttackMapping).filter(
-                ThreatAttackMapping.threat_id == t.id
-            ).first()
-            if has_mappings:
-                try:
-                    kill_chain_service.generate(
-                        db=db,
-                        threat_id=t.id,
-                        tenant_id=tid,
-                    )
-                    generated += 1
-                except Exception as exc_t:
-                    _logger.debug("[FULL_RUN] kill_chain %s: %s", t.id, exc_t)
-        _set_step(results, "kill_chains", "completed",
-                  f"{generated} attack scenario{'s' if generated != 1 else ''} generated", 97)
-        _logger.info("[FULL_RUN] Step kill_chains done: %s generated", generated)
-    except Exception as exc:
-        _set_step(results, "kill_chains", "failed", str(exc)[:200], 97)
-        _logger.warning("[FULL_RUN] kill_chains failed (continuing): %s", exc)
     _commit_results(db, job, results)
 
     # ── Finalize ──────────────────────────────────────────────────
