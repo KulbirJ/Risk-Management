@@ -50,9 +50,12 @@ export function TriggerAssessmentButton({ assessmentId, onComplete }: TriggerAss
   const steps: FullRunStep[] = results?.steps ?? [];
   const isDone   = job?.status === 'completed' || job?.status === 'failed';
 
-  // Detect a job that has been in pending/running state for >10 minutes
-  const isStuck = !isDone && !!job && !!job.started_at &&
-    (Date.now() - new Date(job.started_at).getTime()) > 10 * 60 * 1000;
+  // Detect a job stuck in pending/running for >2 minutes.
+  // Use created_at as fallback because started_at is NULL while status="pending".
+  const jobAgeMs = job
+    ? Date.now() - new Date(job.started_at ?? job.created_at).getTime()
+    : 0;
+  const isStuck = !isDone && !!job && jobAgeMs > 2 * 60 * 1000;
 
   // ── On mount: reconnect to any in-progress job ───────────────────
   // If the user refreshed the page mid-run, pick up where we left off.
@@ -146,7 +149,7 @@ export function TriggerAssessmentButton({ assessmentId, onComplete }: TriggerAss
   };
 
   const handleClose = () => {
-    if (!isDone && jobId) return; // block close while pipeline is running
+    if (!isDone && jobId && !isStuck) return; // block close while actively running (allow if stuck)
     setIsOpen(false);
   };
 
@@ -174,33 +177,28 @@ export function TriggerAssessmentButton({ assessmentId, onComplete }: TriggerAss
           {isLaunching ? 'Starting…' : 'Trigger Assessment'}
         </button>
 
-        {/* Stuck-job badge + force-reset button — only visible when running >10 min */}
-        {isStuck && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50
-                           border border-amber-200 rounded-lg px-3 py-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
-            Last run: running
+        {/* Running/pending badge — always visible while a job is active */}
+        {!isDone && !!jobId && (
+          <span
+            className={`inline-flex items-center gap-1.5 text-xs rounded-lg px-3 py-2 border ${
+              isStuck
+                ? 'text-amber-700 bg-amber-50 border-amber-200'
+                : 'text-blue-700 bg-blue-50 border-blue-200'
+            }`}
+          >
+            <Loader2 className={`w-3.5 h-3.5 animate-spin ${
+              isStuck ? 'text-amber-500' : 'text-blue-500'
+            }`} />
+            {isStuck ? 'Stuck — ' : 'Running — '}
             <button
-              onClick={handleForceReset}
+              onClick={isStuck ? handleForceReset : () => setIsOpen(true)}
               disabled={isResetting}
-              className="ml-1 font-semibold underline hover:text-amber-900 disabled:opacity-50"
-              title="Reset the stuck job so you can trigger a fresh run"
+              className="font-semibold underline hover:opacity-80 disabled:opacity-50"
+              title={isStuck ? 'Reset the stuck job so you can trigger a fresh run' : 'View progress'}
             >
-              {isResetting ? 'Resetting…' : 'Reset'}
+              {isResetting ? 'Resetting…' : isStuck ? 'Force Reset' : 'View progress'}
             </button>
           </span>
-        )}
-
-        {/* Non-stuck running badge — lets user re-open the progress modal */}
-        {!isDone && !!jobId && !isStuck && (
-          <button
-            onClick={() => setIsOpen(true)}
-            className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50
-                       border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-100 transition-colors"
-          >
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-            Last run: running
-          </button>
         )}
       </div>
 
@@ -230,7 +228,7 @@ export function TriggerAssessmentButton({ assessmentId, onComplete }: TriggerAss
                         ? 'All steps completed — reloading results…'
                         : 'Finished with some errors (completed steps were saved)'
                       : isStuck
-                      ? 'Pipeline appears stuck — you can force-reset it below'
+                      ? `Appears stuck (${Math.floor(jobAgeMs / 60000)} min) — force-reset below`
                       : jobId
                       ? 'Pipeline is running — please wait…'
                       : 'Starting pipeline…'}
@@ -349,14 +347,18 @@ export function TriggerAssessmentButton({ assessmentId, onComplete }: TriggerAss
               </p>
 
               <div className="ml-4 flex items-center gap-2">
-                {isStuck && (
+                {!isDone && !!jobId && (
                   <button
                     onClick={handleForceReset}
                     disabled={isResetting}
-                    className="px-3 py-1.5 rounded-lg text-sm font-medium text-amber-700 bg-amber-50
-                               border border-amber-200 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
+                      isStuck
+                        ? 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100'
+                        : 'text-gray-600 bg-white border-gray-200 hover:bg-gray-100'
+                    }`}
+                    title="Reset this job so you can trigger a fresh run"
                   >
-                    {isResetting ? 'Resetting…' : 'Force Reset'}
+                    {isResetting ? 'Resetting…' : 'Reset Job'}
                   </button>
                 )}
                 <button

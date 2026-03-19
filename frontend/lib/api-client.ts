@@ -350,6 +350,21 @@ class APIClient {
     return data;
   }
 
+  /** Test live Bedrock connectivity and measure latency. */
+  async testBedrockConnectivity(): Promise<{
+    bedrock_enabled: boolean;
+    model_id: string;
+    region: string;
+    client_initialized: boolean;
+    test_status: 'ok' | 'no_response' | 'timeout' | 'error' | 'skipped';
+    latency_ms: number | null;
+    error: string | null;
+    response_preview: string | null;
+  }> {
+    const { data } = await this.client.post('/intelligence/bedrock-test');
+    return data;
+  }
+
   /** Trigger the full assessment pipeline (all 6 steps) in one click. Returns job_id. */
   async runFullAssessment(assessmentId: string): Promise<{ job_id: string; status: string; message: string }> {
     const { data } = await this.client.post(`/assessments/${assessmentId}/run-full`);

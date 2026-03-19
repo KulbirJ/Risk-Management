@@ -49,8 +49,36 @@ def create_app() -> FastAPI:
     # Health check endpoint
     @app.get("/health")
     async def health_check():
-        """Service health check."""
-        return {"status": "healthy", "version": settings.app_version}
+        """Service health check — includes DB ping and Bedrock config status."""
+        from sqlalchemy import text
+        from .db.database import SessionLocal
+        from .services.bedrock_service import BedrockService
+
+        checks: dict = {"version": settings.app_version}
+
+        # DB ping
+        try:
+            db = SessionLocal()
+            db.execute(text("SELECT 1"))
+            db.close()
+            checks["db"] = "ok"
+        except Exception as exc:
+            checks["db"] = f"error: {exc}"
+
+        # Bedrock config (does NOT make a live call — use /intelligence/bedrock-test for that)
+        try:
+            bedrock = BedrockService()
+            checks["bedrock"] = {
+                "enabled": bedrock.enabled,
+                "model_id": bedrock.model_id,
+                "region": bedrock.region,
+                "client_initialized": bedrock.client is not None,
+            }
+        except Exception as exc:
+            checks["bedrock"] = {"enabled": False, "error": str(exc)}
+
+        overall = "healthy" if checks["db"] == "ok" else "degraded"
+        return {"status": overall, **checks}
     
     # Seed endpoint for database initialization
     @app.post("/seed")

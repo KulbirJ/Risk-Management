@@ -327,3 +327,72 @@ def reset_stuck_jobs(
 
     db.commit()
     return {"reset_count": count}
+
+
+@router.post("/bedrock-test")
+def test_bedrock_connectivity(
+    context: tuple[UUID, UUID] = Depends(get_tenant_context)
+):
+    """
+    Send a minimal test prompt to Bedrock and report latency + success/failure.
+    Use this to diagnose connectivity issues without running a full assessment.
+    Returns within ~30 s — if Bedrock is healthy it should respond in <5 s.
+    """
+    import time
+    import concurrent.futures
+    from ..services.bedrock_service import BedrockService
+
+    bedrock = BedrockService()
+
+    result = {
+        "bedrock_enabled": bedrock.enabled,
+        "model_id": bedrock.model_id,
+        "region": bedrock.region,
+        "client_initialized": bedrock.client is not None,
+        "test_status": "skipped",
+        "latency_ms": None,
+        "error": None,
+        "response_preview": None,
+    }
+
+    if not bedrock.enabled or not bedrock.client:
+        result["error"] = "Bedrock is disabled or client failed to initialize."
+        return result
+
+    TEST_PROMPT = "Reply with the single word: OK"
+    TEST_TIMEOUT = 30  # seconds — short so this endpoint is fast to call
+
+    t0 = time.time()
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(
+                bedrock.invoke_model,
+                TEST_PROMPT,
+                None,      # no system prompt
+                10,        # max_tokens = 10
+                0.0,       # temperature = 0
+            )
+            try:
+                response = future.result(timeout=TEST_TIMEOUT)
+                elapsed_ms = int((time.time() - t0) * 1000)
+                if response:
+                    result["test_status"] = "ok"
+                    result["latency_ms"] = elapsed_ms
+                    result["response_preview"] = response.strip()[:100]
+                else:
+                    result["test_status"] = "no_response"
+                    result["latency_ms"] = elapsed_ms
+                    result["error"] = "invoke_model returned None — check model access permissions or model ID."
+            except concurrent.futures.TimeoutError:
+                elapsed_ms = int((time.time() - t0) * 1000)
+                result["test_status"] = "timeout"
+                result["latency_ms"] = elapsed_ms
+                result["error"] = f"Bedrock did not respond within {TEST_TIMEOUT}s — network or throttling issue."
+    except Exception as exc:
+        elapsed_ms = int((time.time() - t0) * 1000)
+        result["test_status"] = "error"
+        result["latency_ms"] = elapsed_ms
+        result["error"] = str(exc)
+
+    logger.info("[BEDROCK-TEST] result=%s latency_ms=%s", result["test_status"], result["latency_ms"])
+    return result
