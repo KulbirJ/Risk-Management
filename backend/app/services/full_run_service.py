@@ -137,10 +137,10 @@ def _run_pipeline_body(db, job, job_id, assessment_id, tenant_id, user_id, _logg
     aid = UUID(assessment_id)
 
     # ── Step 1: AI Enrichment ─────────────────────────────────────
-    # Give the entire step (metadata + all evidence files) a 5-minute wall-clock
-    # budget.  Each individual Bedrock call is already guarded by bedrock_service's
-    # per-call timeout; this outer limit prevents accumulation across many files.
-    _AI_ENRICHMENT_STEP_TIMEOUT = 300  # seconds
+    # Each Bedrock call is capped at 60 s (bedrock_service).  Give the whole
+    # step 90 s — enough for 1-2 calls — so a Bedrock outage fails within
+    # 90 s rather than hanging for 5 minutes.
+    _AI_ENRICHMENT_STEP_TIMEOUT = 90  # seconds
     _set_step(results, "ai_enrichment", "running", "Calling Bedrock for threat analysis…")
     _commit_results(db, job, results)
     try:

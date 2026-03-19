@@ -158,6 +158,25 @@ class IntelligenceService:
             )
             return results
 
+        # ── Pre-flight: verify Bedrock responds before looping ───────
+        # A quick probe (max 10 tokens) catches auth/network failures fast
+        # without burning the full step timeout on the first real call.
+        if self.bedrock.enabled and self.bedrock.client:
+            _probe = self.bedrock.invoke_model("Reply OK", max_tokens=10, temperature=0.0)
+            if _probe is None:
+                logger.error(
+                    "Bedrock pre-flight check failed for assessment %s — skipping AI enrichment",
+                    assessment_id,
+                )
+                results["status"] = "completed_no_findings"
+                results["errors"].append(
+                    "Bedrock is not responding (pre-flight check failed). "
+                    "Skipping AI enrichment — check model access permissions, "
+                    "IAM role, and network connectivity from Lambda to Bedrock."
+                )
+                return results
+            logger.info("Bedrock pre-flight check passed — starting item analysis")
+
         # ── Step 3: Analyze each item ───────────────────────────────
         for i, item in enumerate(items):
             item_label = item["label"]

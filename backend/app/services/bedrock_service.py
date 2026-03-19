@@ -8,12 +8,13 @@ from botocore.config import Config as BotocoreConfig
 from botocore.exceptions import ClientError
 from ..core.config import settings
 
-# Bedrock read timeout: long enough for large responses, short enough to avoid
-# indefinite hangs. Bedrock invoke_model is synchronous; 300 s covers even
-# large Nova-Pro responses while preventing the pipeline from hanging forever.
-_BEDROCK_CONNECT_TIMEOUT = 10   # seconds to establish TCP connection
-_BEDROCK_READ_TIMEOUT    = 300  # seconds to wait for a model response
-_BEDROCK_CALL_TIMEOUT    = 300  # hard wall-clock limit per invoke_model call
+# Bedrock timeouts: 60 s is comfortably above real Nova Pro / Claude latency
+# (~5-15 s for typical threat-analysis prompts).  Keeping it well below 300 s
+# means a hung call fails in < 1 minute instead of 5, letting the pipeline
+# step fail fast and move on rather than stalling the whole job.
+_BEDROCK_CONNECT_TIMEOUT = 10  # seconds to establish TCP connection
+_BEDROCK_READ_TIMEOUT    = 60  # seconds to wait for a model response
+_BEDROCK_CALL_TIMEOUT    = 60  # hard wall-clock limit per invoke_model call
 
 logger = logging.getLogger(__name__)
 
