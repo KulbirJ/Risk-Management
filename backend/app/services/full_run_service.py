@@ -15,6 +15,7 @@ Progress is persisted in IntelligenceJob.results so the frontend can poll it.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 import traceback
 from datetime import datetime
@@ -136,15 +137,27 @@ def _run_pipeline_body(db, job, job_id, assessment_id, tenant_id, user_id, _logg
     aid = UUID(assessment_id)
 
     # ── Step 1: AI Enrichment ─────────────────────────────────────
+    # Give the entire step (metadata + all evidence files) a 5-minute wall-clock
+    # budget.  Each individual Bedrock call is already guarded by bedrock_service's
+    # per-call timeout; this outer limit prevents accumulation across many files.
+    _AI_ENRICHMENT_STEP_TIMEOUT = 300  # seconds
     _set_step(results, "ai_enrichment", "running", "Calling Bedrock for threat analysis…")
     _commit_results(db, job, results)
     try:
-        ai_result = intelligence_service.enrich_assessment(
-            db=db,
-            assessment_id=assessment_id,
-            tenant_id=tenant_id,
-            job_id=job_id,
-        )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
+            _fut = _pool.submit(
+                intelligence_service.enrich_assessment,
+                db=db,
+                assessment_id=assessment_id,
+                tenant_id=tenant_id,
+                job_id=job_id,
+            )
+            try:
+                ai_result = _fut.result(timeout=_AI_ENRICHMENT_STEP_TIMEOUT)
+            except concurrent.futures.TimeoutError:
+                raise TimeoutError(
+                    f"AI enrichment timed out after {_AI_ENRICHMENT_STEP_TIMEOUT // 60} minutes"
+                )
         n_threats = ai_result.get("threats_mapped", 0)
         _set_step(results, "ai_enrichment", "completed",
                   f"{n_threats} threat{'s' if n_threats != 1 else ''} identified", 17)

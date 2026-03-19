@@ -1,10 +1,19 @@
 """AWS Bedrock service for AI model interactions."""
 import json
 import logging
+import concurrent.futures
 from typing import Optional, Dict, Any, List
 import boto3
+from botocore.config import Config as BotocoreConfig
 from botocore.exceptions import ClientError
 from ..core.config import settings
+
+# Bedrock read timeout: long enough for large responses, short enough to avoid
+# indefinite hangs. Bedrock invoke_model is synchronous; 300 s covers even
+# large Nova-Pro responses while preventing the pipeline from hanging forever.
+_BEDROCK_CONNECT_TIMEOUT = 10   # seconds to establish TCP connection
+_BEDROCK_READ_TIMEOUT    = 300  # seconds to wait for a model response
+_BEDROCK_CALL_TIMEOUT    = 300  # hard wall-clock limit per invoke_model call
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +34,12 @@ class BedrockService:
             try:
                 self.client = boto3.client(
                     service_name='bedrock-runtime',
-                    region_name=self.region
+                    region_name=self.region,
+                    config=BotocoreConfig(
+                        connect_timeout=_BEDROCK_CONNECT_TIMEOUT,
+                        read_timeout=_BEDROCK_READ_TIMEOUT,
+                        retries={"max_attempts": 1},  # don't retry hangs
+                    ),
                 )
                 logger.info(f"Bedrock service initialized with model: {self.model_id}")
             except Exception as e:
@@ -74,15 +88,27 @@ class BedrockService:
 
         try:
             # Determine model family and format request accordingly
-            if "anthropic.claude" in model_id:
-                return self._invoke_claude(prompt, system_prompt, max_tokens, temperature, model_id)
-            elif "amazon.nova" in model_id:
-                return self._invoke_nova(prompt, system_prompt, max_tokens, temperature, model_id)
-            elif "amazon.titan" in model_id:
-                return self._invoke_titan(prompt, max_tokens, temperature, model_id)
-            else:
-                logger.error(f"Unsupported model: {model_id}")
-                return None
+            def _dispatch():
+                if "anthropic.claude" in model_id:
+                    return self._invoke_claude(prompt, system_prompt, max_tokens, temperature, model_id)
+                elif "amazon.nova" in model_id:
+                    return self._invoke_nova(prompt, system_prompt, max_tokens, temperature, model_id)
+                elif "amazon.titan" in model_id:
+                    return self._invoke_titan(prompt, max_tokens, temperature, model_id)
+                else:
+                    logger.error(f"Unsupported model: {model_id}")
+                    return None
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _executor:
+                _future = _executor.submit(_dispatch)
+                try:
+                    return _future.result(timeout=_BEDROCK_CALL_TIMEOUT)
+                except concurrent.futures.TimeoutError:
+                    logger.error(
+                        "Bedrock invoke_model timed out after %d s (model=%s)",
+                        _BEDROCK_CALL_TIMEOUT, model_id,
+                    )
+                    return None
 
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
