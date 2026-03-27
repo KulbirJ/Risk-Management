@@ -125,8 +125,12 @@ class Evidence(Base):
     status = Column(String(50), default="processing")  # processing, ready, failed
     extracted_text = Column(Text, nullable=True)  # Extracted text content from document
     extract_metadata = Column(JSONB, nullable=True)  # Parsing metadata (page count, etc.)
-    document_type = Column(String(50), nullable=True)  # vulnerability_scan, architecture_doc, policy, other
+    document_type = Column(String(50), nullable=True)  # vulnerability_scan, architecture_doc, policy, network_diagram, config, other
+    document_type_confidence = Column(Integer, nullable=True)  # 0-100 confidence in auto-detected type
     quality = Column(String(20), default="medium")  # high, medium, low
+    analysis_summary = Column(Text, nullable=True)  # AI-generated plain-English summary
+    analysis_findings = Column(JSONB, nullable=True)  # Structured findings from per-file Bedrock analysis
+    risk_indicators = Column(JSONB, nullable=True)  # Key risk signals extracted by AI
     last_enriched_at = Column(DateTime(timezone=True), nullable=True)  # When this file was last included in AI enrichment
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 

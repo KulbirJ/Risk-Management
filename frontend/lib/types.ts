@@ -58,6 +58,16 @@ export interface Threat {
   updated_at: string;
 }
 
+export interface RiskIndicators {
+  critical_vulns?: number;
+  high_vulns?: number;
+  exposed_services?: string[];
+  missing_controls?: string[];
+  compliance_gaps?: string[];
+  secrets_found?: number;
+  key_concerns?: string[];
+}
+
 export interface Evidence {
   id: string;
   assessment_id: string;
@@ -71,7 +81,12 @@ export interface Evidence {
   extracted_text?: string;
   extract_metadata?: Record<string, any>;
   document_type?: string;
+  document_type_confidence?: number;
   quality?: string;
+  analysis_summary?: string;
+  analysis_findings?: Array<Record<string, any>>;
+  risk_indicators?: RiskIndicators;
+  last_enriched_at?: string;
   created_at: string;
 }
 

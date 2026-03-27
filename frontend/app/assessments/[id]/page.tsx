@@ -16,6 +16,7 @@ import { MLScoringPanel, MLScoreBadge } from '../../../components/MLScoringPanel
 import { ThreatGraphPanel } from '../../../components/ThreatGraphPanel';
 import { ClusteringPanel } from '../../../components/ClusteringPanel';
 import { TriggerAssessmentButton } from '../../../components/TriggerAssessmentButton';
+import { EvidenceDetailModal } from '../../../components/EvidenceDetailModal';
 import apiClient from '../../../lib/api-client';
 import { Assessment, Threat, ActiveRisk, Recommendation, Evidence } from '../../../lib/types';
 import { format } from 'date-fns';
@@ -66,6 +67,7 @@ export default function AssessmentDetailPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
   const [threatsExpanded, setThreatsExpanded] = useState(false);
 
   // Analytics tab state
@@ -356,6 +358,7 @@ export default function AssessmentDetailPage() {
     const labels: Record<string, string> = {
       vulnerability_scan: 'Vuln Scan',
       architecture_doc: 'Architecture',
+      network_diagram: 'Network Diagram',
       policy: 'Policy',
       config: 'Config',
       other: 'Document',
@@ -604,21 +607,27 @@ export default function AssessmentDetailPage() {
             {evidenceList.map((ev) => (
               <div
                 key={ev.id}
-                className="bg-white rounded-lg border border-gray-200 p-4 flex items-center justify-between hover:shadow-sm transition-shadow"
+                className="bg-white rounded-lg border border-gray-200 p-4 flex items-center justify-between hover:shadow-sm hover:border-blue-300 transition-all cursor-pointer"
+                onClick={() => setSelectedEvidence(ev)}
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   {getStatusIcon(ev.status)}
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{ev.file_name}</p>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
                       <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded font-medium">
                         {getDocTypeLabel(ev.document_type)}
                       </span>
                       <span>{formatFileSize(ev.size_bytes)}</span>
                       <span>{format(new Date(ev.created_at), 'MMM d, yyyy')}</span>
-                      {ev.status === 'ready' && ev.extracted_text && (
-                        <span className="text-green-600">
-                          {ev.extracted_text.length.toLocaleString()} chars extracted
+                      {ev.status === 'ready' && ev.analysis_summary && (
+                        <span className="text-green-700 truncate max-w-[300px]" title={ev.analysis_summary}>
+                          {ev.analysis_summary.slice(0, 80)}{ev.analysis_summary.length > 80 ? '…' : ''}
+                        </span>
+                      )}
+                      {ev.status === 'ready' && !ev.analysis_summary && ev.extracted_text && (
+                        <span className="text-gray-500">
+                          {ev.extracted_text.length.toLocaleString()} chars — analysis pending
                         </span>
                       )}
                       {ev.status === 'failed' && (
@@ -628,9 +637,48 @@ export default function AssessmentDetailPage() {
                         <span className="text-blue-600">Processing...</span>
                       )}
                     </div>
+                    {/* Mini risk indicator badges */}
+                    {ev.risk_indicators && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {(ev.risk_indicators.critical_vulns ?? 0) > 0 && (
+                          <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">
+                            {ev.risk_indicators.critical_vulns} critical
+                          </span>
+                        )}
+                        {(ev.risk_indicators.high_vulns ?? 0) > 0 && (
+                          <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">
+                            {ev.risk_indicators.high_vulns} high
+                          </span>
+                        )}
+                        {(ev.risk_indicators.missing_controls?.length ?? 0) > 0 && (
+                          <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium">
+                            {ev.risk_indicators.missing_controls!.length} missing controls
+                          </span>
+                        )}
+                        {(ev.risk_indicators.secrets_found ?? 0) > 0 && (
+                          <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">
+                            {ev.risk_indicators.secrets_found} secrets
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 ml-2">
+                <div className="flex items-center gap-1 ml-2" onClick={(e) => e.stopPropagation()}>
+                  {ev.status === 'ready' && !ev.analysis_summary && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await apiClient.analyzeEvidence(ev.id);
+                          await loadAssessmentData();
+                        } catch {}
+                      }}
+                      className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
+                      title="Analyze with AI"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                    </button>
+                  )}
                   {(ev.status === 'processing' || ev.status === 'failed') && (
                     <button
                       onClick={() => handleRetryEvidence(ev.id)}
@@ -666,6 +714,25 @@ export default function AssessmentDetailPage() {
           <p className="text-sm text-gray-500 text-center py-2">
             Upload vulnerability scans, architecture docs, or other evidence to improve AI threat analysis.
           </p>
+        )}
+
+        {/* Evidence Detail Modal */}
+        {selectedEvidence && (
+          <EvidenceDetailModal
+            isOpen={!!selectedEvidence}
+            onClose={() => setSelectedEvidence(null)}
+            evidence={selectedEvidence}
+            onDelete={(id) => {
+              setSelectedEvidence(null);
+              handleDeleteEvidence(id);
+            }}
+            onRetry={(id) => {
+              setSelectedEvidence(null);
+              handleRetryEvidence(id);
+            }}
+            onDownload={(id) => handleDownloadEvidence(id)}
+            onAnalyzed={() => loadAssessmentData()}
+          />
         )}
       </div>
 

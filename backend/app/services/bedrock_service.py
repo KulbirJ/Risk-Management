@@ -333,6 +333,94 @@ class BedrockService:
             logger.error(f"Recovery failed: {e}")
             return None
 
+    def analyze_image(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        prompt: str,
+    ) -> Optional[str]:
+        """
+        Analyze an image using Claude 3 Haiku's multimodal vision capability.
+
+        Sends the image as base64-encoded content alongside a text prompt.
+        Used for network diagrams, architecture screenshots, and scanned documents.
+
+        Args:
+            image_bytes: Raw image bytes (PNG, JPEG, GIF, WebP)
+            mime_type: Image MIME type (e.g. "image/png")
+            prompt: Text prompt instructing what to extract from the image
+
+        Returns:
+            Text description/analysis of the image, or None on failure
+        """
+        import base64
+
+        if not self.enabled or not self.client:
+            logger.warning("Bedrock is not enabled — skipping image analysis")
+            return None
+
+        # Claude 3 Haiku supports vision — use it for multimodal
+        model_id = self.fallback_model_id
+        if "anthropic.claude" not in model_id:
+            logger.warning("Fallback model is not Claude — cannot do multimodal image analysis")
+            return None
+
+        # Validate mime type
+        supported_types = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+        if mime_type not in supported_types:
+            logger.warning(f"Unsupported image type for multimodal: {mime_type}")
+            return None
+
+        try:
+            image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+            body = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 4096,
+                "temperature": 0.2,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": mime_type,
+                                    "data": image_b64,
+                                },
+                            },
+                            {
+                                "type": "text",
+                                "text": prompt,
+                            },
+                        ],
+                    }
+                ],
+            }
+
+            response = self.client.invoke_model(
+                modelId=model_id,
+                body=json.dumps(body),
+                contentType="application/json",
+                accept="application/json",
+            )
+
+            response_body = json.loads(response["body"].read())
+
+            if response_body.get("content") and len(response_body["content"]) > 0:
+                return response_body["content"][0].get("text", "")
+
+            return None
+
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
+            logger.error(f"Bedrock multimodal ClientError ({error_code}): {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in multimodal image analysis: {e}")
+            return None
+
     def _validate_schema(self, data: Dict[str, Any], schema: Dict[str, Any]) -> bool:
         """Basic schema validation - checks if required keys exist."""
         required_keys = schema.get('required', [])

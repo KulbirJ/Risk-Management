@@ -337,6 +337,115 @@ def delete_evidence(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+@router.get("/{evidence_id}/analysis")
+def get_evidence_analysis(
+    evidence_id: UUID,
+    db: Session = Depends(get_db),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context)
+):
+    """
+    Get the stored analysis results for a single evidence file.
+    Returns analysis_summary, analysis_findings, risk_indicators, extract_metadata,
+    and document_type. If the file has not been analyzed yet, returns extracted_text
+    preview with enrichment_pending=True.
+    """
+    tenant_id, _ = context
+
+    evidence = EvidenceService.get_evidence(db=db, evidence_id=evidence_id, tenant_id=tenant_id)
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+
+    has_analysis = bool(getattr(evidence, 'analysis_summary', None))
+
+    return {
+        "evidence_id": str(evidence.id),
+        "file_name": evidence.file_name,
+        "document_type": evidence.document_type,
+        "document_type_confidence": getattr(evidence, 'document_type_confidence', None),
+        "analysis_summary": getattr(evidence, 'analysis_summary', None),
+        "analysis_findings": getattr(evidence, 'analysis_findings', None),
+        "risk_indicators": getattr(evidence, 'risk_indicators', None),
+        "extract_metadata": evidence.extract_metadata,
+        "extracted_text_preview": (evidence.extracted_text or "")[:500] if not has_analysis else None,
+        "enrichment_pending": not has_analysis,
+        "last_enriched_at": str(evidence.last_enriched_at) if evidence.last_enriched_at else None,
+    }
+
+
+@router.post("/{evidence_id}/analyze")
+def analyze_evidence_file(
+    evidence_id: UUID,
+    db: Session = Depends(get_db),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context)
+):
+    """
+    Trigger Bedrock analysis on a single evidence file without running full
+    assessment enrichment. Uses document-type-specific prompts.
+    """
+    tenant_id, _ = context
+
+    from ..models.models import Assessment, ThreatCatalogue
+    from ..services.intelligence_service import intelligence_service
+
+    evidence = EvidenceService.get_evidence(db=db, evidence_id=evidence_id, tenant_id=tenant_id)
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+
+    if evidence.status != "ready":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Evidence is not ready for analysis (status: {evidence.status})"
+        )
+
+    if not evidence.extracted_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Evidence has no extracted text to analyze"
+        )
+
+    assessment = db.query(Assessment).filter(
+        Assessment.id == evidence.assessment_id,
+        Assessment.tenant_id == tenant_id,
+    ).first()
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
+
+    # Build catalogue summary
+    catalogue_threats = db.query(ThreatCatalogue).filter(
+        ThreatCatalogue.tenant_id == tenant_id,
+        ThreatCatalogue.is_active == True,
+    ).all()
+
+    catalogue_summary = "\n".join([
+        f"- catalogue_key: {t.catalogue_key}, name: {t.name}, category: {t.category or 'General'}"
+        for t in catalogue_threats[:20]
+    ]) if catalogue_threats else "No threat catalogue available"
+
+    try:
+        findings = intelligence_service._analyze_evidence_file(
+            evidence, assessment, catalogue_summary
+        )
+
+        # Stamp enrichment time
+        from datetime import datetime
+        evidence.last_enriched_at = datetime.utcnow()
+        db.commit()
+
+        return {
+            "evidence_id": str(evidence.id),
+            "file_name": evidence.file_name,
+            "document_type": evidence.document_type,
+            "analysis_summary": getattr(evidence, 'analysis_summary', None),
+            "analysis_findings": getattr(evidence, 'analysis_findings', None),
+            "risk_indicators": getattr(evidence, 'risk_indicators', None),
+            "findings_count": len(findings),
+            "status": "analyzed",
+        }
+    except Exception as e:
+        logger.error(f"Error analyzing evidence {evidence_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.get("/stats/count", response_model=dict)
 def get_evidence_stats(
     assessment_id: Optional[UUID] = Query(None, description="Filter by assessment ID"),

@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     intelligence_confidence_threshold: float = 0.7
     openai_api_key: Optional[str] = None
 
+    # Bedrock Multimodal (image/diagram analysis via Claude 3 Haiku vision)
+    ocr_via_bedrock: bool = True  # Enable image analysis via Bedrock multimodal
+    ocr_max_image_size_mb: int = 5  # Skip images larger than this to control costs
+
     # MITRE ATT&CK Integration
     attack_taxii_url: str = "https://attack-taxii.mitre.org/api/v21/collections/1f5f1533-f617-4ca8-9ab4-6a02367fa019/objects/"
     attack_stix_bundle_url: str = "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json"

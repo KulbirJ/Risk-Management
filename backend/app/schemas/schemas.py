@@ -163,7 +163,11 @@ class EvidenceRead(BaseModel):
     extracted_text: Optional[str] = None
     extract_metadata: Optional[dict] = None
     document_type: Optional[str] = None
+    document_type_confidence: Optional[int] = None
     quality: Optional[str] = None
+    analysis_summary: Optional[str] = None
+    analysis_findings: Optional[list] = None
+    risk_indicators: Optional[dict] = None
     last_enriched_at: Optional[datetime] = None
     created_at: datetime
 

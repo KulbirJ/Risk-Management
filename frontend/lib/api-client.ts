@@ -262,6 +262,16 @@ class APIClient {
     await this.client.delete(`/evidence/${id}`);
   }
 
+  async getEvidenceAnalysis(evidenceId: string): Promise<Record<string, any>> {
+    const { data } = await this.client.get(`/evidence/${evidenceId}/analysis`);
+    return data;
+  }
+
+  async analyzeEvidence(evidenceId: string): Promise<Record<string, any>> {
+    const { data } = await this.client.post(`/evidence/${evidenceId}/analyze`, {});
+    return data;
+  }
+
   // Recommendations
   async getRecommendations(params?: {
     assessment_id?: string;

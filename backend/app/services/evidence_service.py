@@ -108,10 +108,24 @@ class EvidenceService:
 
             # Auto-detect document type if not set
             if not evidence.document_type or evidence.document_type == "other":
-                evidence.document_type = DocumentParser.detect_document_type(
+                doc_type, confidence = DocumentParser.detect_document_type_with_confidence(
                     text=evidence.extracted_text,
                     file_name=evidence.file_name
                 )
+                evidence.document_type = doc_type
+                if hasattr(evidence, 'document_type_confidence'):
+                    evidence.document_type_confidence = confidence
+
+            # Extract structured metadata based on document type
+            structured_meta = DocumentParser.extract_structured_metadata(
+                text=evidence.extracted_text,
+                document_type=evidence.document_type,
+                file_name=evidence.file_name,
+            )
+            if structured_meta:
+                existing_meta = evidence.extract_metadata or {}
+                existing_meta["structured"] = structured_meta
+                evidence.extract_metadata = existing_meta
 
             db.commit()
             db.refresh(evidence)
