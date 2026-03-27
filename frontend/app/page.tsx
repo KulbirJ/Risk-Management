@@ -7,7 +7,7 @@ import { Button } from '../components/Button';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { Alert } from '../components/Alert';
 import apiClient from '../lib/api-client';
-import { Assessment, ActiveRisk, MLModelInfo } from '../lib/types';
+import { Assessment, ActiveRisk, MLModelInfo, Threat, ComplianceSummary } from '../lib/types';
 import { StatusBadge } from '../components/Badge';
 import { format } from 'date-fns';
 
@@ -22,6 +22,8 @@ export default function DashboardPage() {
   const [recentAssessments, setRecentAssessments] = useState<Assessment[]>([]);
   const [topRisks, setTopRisks] = useState<ActiveRisk[]>([]);
   const [mlModel, setMlModel] = useState<MLModelInfo | null>(null);
+  const [allThreats, setAllThreats] = useState<Threat[]>([]);
+  const [complianceSummary, setComplianceSummary] = useState<ComplianceSummary[]>([]);
 
   useEffect(() => {
     loadDashboardData();
@@ -33,15 +35,19 @@ export default function DashboardPage() {
       setError(null);
 
       // Load stats and recent data
-      const [assessmentsResponse, risksResponse, mlModelInfo] = await Promise.all([
+      const [assessmentsResponse, risksResponse, mlModelInfo, threatsResponse, complianceResponse] = await Promise.all([
         apiClient.getAssessments({ limit: 5 }),
         apiClient.getActiveRisks({ status: 'open' }).catch(() => []),
         apiClient.getMLModelInfo().catch(() => null),
+        apiClient.getAllThreats({ limit: 500 }).catch(() => []),
+        apiClient.getComplianceSummary().catch(() => []),
       ]);
 
       const assessments = assessmentsResponse;
       const risks = risksResponse;
       setMlModel(mlModelInfo);
+      setAllThreats(threatsResponse);
+      setComplianceSummary(complianceResponse);
 
       setStats({
         totalAssessments: assessments.length,
@@ -137,6 +143,61 @@ export default function DashboardPage() {
         </Link>
       </div>
 
+      {/* Risk Heatmap + Compliance Posture */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Risk Heatmap */}
+        <div className="bg-white rounded-lg border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Risk Heatmap</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Likelihood × Impact distribution across all threats</p>
+          </div>
+          <div className="p-6">
+            <RiskHeatmap threats={allThreats} />
+          </div>
+        </div>
+
+        {/* Compliance Posture */}
+        <div className="bg-white rounded-lg border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Compliance Posture</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Framework compliance overview</p>
+          </div>
+          <div className="p-6">
+            {complianceSummary.length === 0 ? (
+              <p className="text-center text-gray-500 py-8 text-sm">No compliance frameworks configured yet</p>
+            ) : (
+              <div className="space-y-4">
+                {complianceSummary.map(s => (
+                  <div key={s.framework_id}>
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="font-medium text-gray-900">{s.framework_name}</span>
+                      <span className={`font-bold ${
+                        s.compliance_pct >= 80 ? 'text-green-600' : s.compliance_pct >= 50 ? 'text-amber-600' : 'text-red-600'
+                      }`}>{s.compliance_pct}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div
+                        className={`rounded-full h-2.5 transition-all ${
+                          s.compliance_pct >= 80 ? 'bg-green-500' : s.compliance_pct >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${Math.min(s.compliance_pct, 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                      <span>{s.total_controls} controls</span>
+                      <span className="text-green-600">{s.compliant} ✓</span>
+                      <span className="text-red-600">{s.non_compliant} ✗</span>
+                      <span className="text-amber-600">{s.partially_compliant} ~</span>
+                      <span>{s.not_assessed} unassessed</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Recent Assessments */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg border border-gray-200">
@@ -221,6 +282,95 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Risk Heatmap ─────────────────────────────────────────────────────────────
+
+const LEVELS = ['Critical', 'High', 'Medium', 'Low'] as const;
+
+const CELL_COLORS: Record<string, string> = {
+  '0': 'bg-gray-50',
+  '1': 'bg-yellow-100',
+  '2': 'bg-yellow-200',
+  '3': 'bg-orange-300',
+  '4': 'bg-orange-400',
+  '5+': 'bg-red-500 text-white',
+};
+
+function getCellColor(count: number): string {
+  if (count === 0) return CELL_COLORS['0'];
+  if (count <= 1) return CELL_COLORS['1'];
+  if (count <= 2) return CELL_COLORS['2'];
+  if (count <= 3) return CELL_COLORS['3'];
+  if (count <= 4) return CELL_COLORS['4'];
+  return CELL_COLORS['5+'];
+}
+
+function RiskHeatmap({ threats }: { threats: Threat[] }) {
+  // Build likelihood × impact matrix
+  const matrix: Record<string, Record<string, number>> = {};
+  for (const l of LEVELS) {
+    matrix[l] = {};
+    for (const i of LEVELS) {
+      matrix[l][i] = 0;
+    }
+  }
+  for (const t of threats) {
+    const likelihood = t.likelihood || 'Medium';
+    const impact = t.impact || 'Medium';
+    if (matrix[likelihood]?.[impact] !== undefined) {
+      matrix[likelihood][impact]++;
+    }
+  }
+
+  if (threats.length === 0) {
+    return <p className="text-center text-gray-500 py-8 text-sm">No threats to display</p>;
+  }
+
+  return (
+    <div>
+      <div className="flex">
+        {/* Y-axis label */}
+        <div className="flex flex-col justify-center mr-2">
+          <span className="text-xs text-gray-500 font-medium -rotate-90 whitespace-nowrap">Likelihood →</span>
+        </div>
+        <div className="flex-1">
+          {/* Header row */}
+          <div className="grid grid-cols-5 gap-1 mb-1">
+            <div />
+            {LEVELS.slice().reverse().map(imp => (
+              <div key={imp} className="text-center text-xs text-gray-500 font-medium py-1">{imp}</div>
+            ))}
+          </div>
+          {/* Data rows (Critical likelihood at top) */}
+          {LEVELS.map(likelihood => (
+            <div key={likelihood} className="grid grid-cols-5 gap-1 mb-1">
+              <div className="flex items-center justify-end pr-2 text-xs text-gray-500 font-medium">{likelihood}</div>
+              {LEVELS.slice().reverse().map(impact => {
+                const count = matrix[likelihood][impact];
+                return (
+                  <div
+                    key={`${likelihood}-${impact}`}
+                    className={`aspect-square rounded flex items-center justify-center text-sm font-bold ${getCellColor(count)}`}
+                    title={`${likelihood} likelihood × ${impact} impact: ${count} threats`}
+                  >
+                    {count > 0 ? count : ''}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+          <div className="text-center text-xs text-gray-500 font-medium mt-1">Impact →</div>
+        </div>
+      </div>
+      <div className="flex items-center justify-center gap-2 mt-3 text-xs text-gray-500">
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-50 border border-gray-200" /> 0</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-200" /> 1-2</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-400" /> 3-4</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500" /> 5+</span>
       </div>
     </div>
   );

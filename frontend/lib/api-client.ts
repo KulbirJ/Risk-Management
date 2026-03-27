@@ -38,6 +38,10 @@ import type {
   ClusteringResponse,
   SimilarThreatsResponse,
   AssessmentReport,
+  ComplianceFramework,
+  ComplianceControl,
+  ComplianceMapping,
+  ComplianceSummary,
 } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -138,6 +142,11 @@ class APIClient {
     const { data } = await this.client.get('/threats', { 
       params: { ...params, assessment_id: assessmentId } 
     });
+    return data;
+  }
+
+  async getAllThreats(params?: { limit?: number }): Promise<Threat[]> {
+    const { data } = await this.client.get('/threats', { params });
     return data;
   }
 
@@ -609,6 +618,72 @@ class APIClient {
   async findSimilarThreats(threatId: string, topN = 5): Promise<SimilarThreatsResponse> {
     const { data } = await this.client.get(`/clusters/similar/${threatId}`, {
       params: { top_n: topN },
+    });
+    return data;
+  }
+
+  // ── Compliance ─────────────────────────────────────────────────────────
+
+  async listComplianceFrameworks(): Promise<ComplianceFramework[]> {
+    const { data } = await this.client.get('/compliance/frameworks');
+    return data;
+  }
+
+  async getComplianceFramework(frameworkId: string): Promise<ComplianceFramework> {
+    const { data } = await this.client.get(`/compliance/frameworks/${frameworkId}`);
+    return data;
+  }
+
+  async seedComplianceFrameworks(): Promise<{ status: string; frameworks_created: number; controls_created: number }> {
+    const { data } = await this.client.post('/compliance/frameworks/seed');
+    return data;
+  }
+
+  async listComplianceControls(frameworkId: string, family?: string): Promise<ComplianceControl[]> {
+    const { data } = await this.client.get(`/compliance/frameworks/${frameworkId}/controls`, {
+      params: family ? { family } : undefined,
+    });
+    return data;
+  }
+
+  async listComplianceMappings(params?: {
+    assessment_id?: string;
+    framework_id?: string;
+    threat_id?: string;
+    status?: string;
+  }): Promise<ComplianceMapping[]> {
+    const { data } = await this.client.get('/compliance/mappings', { params });
+    return data;
+  }
+
+  async createComplianceMapping(body: {
+    control_id: string;
+    threat_id?: string;
+    assessment_id?: string;
+    status?: string;
+    notes?: string;
+    mapped_by?: string;
+  }): Promise<ComplianceMapping> {
+    const { data } = await this.client.post('/compliance/mappings', body);
+    return data;
+  }
+
+  async updateComplianceMapping(mappingId: string, body: {
+    status?: string;
+    notes?: string;
+    evidence_ids?: string[];
+  }): Promise<ComplianceMapping> {
+    const { data } = await this.client.put(`/compliance/mappings/${mappingId}`, body);
+    return data;
+  }
+
+  async deleteComplianceMapping(mappingId: string): Promise<void> {
+    await this.client.delete(`/compliance/mappings/${mappingId}`);
+  }
+
+  async getComplianceSummary(assessmentId?: string): Promise<ComplianceSummary[]> {
+    const { data } = await this.client.get('/compliance/summary', {
+      params: assessmentId ? { assessment_id: assessmentId } : undefined,
     });
     return data;
   }

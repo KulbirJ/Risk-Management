@@ -17,6 +17,7 @@ import { ThreatGraphPanel } from '../../../components/ThreatGraphPanel';
 import { ClusteringPanel } from '../../../components/ClusteringPanel';
 import { TriggerAssessmentButton } from '../../../components/TriggerAssessmentButton';
 import { EvidenceDetailModal } from '../../../components/EvidenceDetailModal';
+import { CompliancePanel } from '../../../components/CompliancePanel';
 import apiClient from '../../../lib/api-client';
 import { Assessment, Threat, ActiveRisk, Recommendation, Evidence } from '../../../lib/types';
 import { format } from 'date-fns';
@@ -71,7 +72,7 @@ export default function AssessmentDetailPage() {
   const [threatsExpanded, setThreatsExpanded] = useState(false);
 
   // Analytics tab state
-  const [analyticsTab, setAnalyticsTab] = useState<'intel' | 'ml' | 'graph' | 'cluster'>('intel');
+  const [analyticsTab, setAnalyticsTab] = useState<'intel' | 'ml' | 'graph' | 'cluster' | 'compliance'>('intel');
 
   const ALLOWED_TYPES = [
     'application/pdf',
@@ -745,6 +746,7 @@ export default function AssessmentDetailPage() {
               { key: 'ml' as const, label: 'ML Scoring', icon: Brain },
               { key: 'graph' as const, label: 'Threat Graph', icon: Network },
               { key: 'cluster' as const, label: 'Clustering', icon: Boxes },
+              { key: 'compliance' as const, label: 'Compliance', icon: Shield },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -773,6 +775,9 @@ export default function AssessmentDetailPage() {
           )}
           {analyticsTab === 'cluster' && (
             <ClusteringPanel assessmentId={assessmentId} />
+          )}
+          {analyticsTab === 'compliance' && (
+            <CompliancePanel assessmentId={assessmentId} threatIds={threats.map(t => t.id)} />
           )}
         </div>
       </div>

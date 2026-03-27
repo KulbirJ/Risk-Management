@@ -347,6 +347,35 @@ def create_app() -> FastAPI:
                 ("attack_groups", "url", "VARCHAR(512)"),
                 ("attack_groups", "last_synced_at", "TIMESTAMP WITH TIME ZONE"),
                 ("attack_groups", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ COMPLIANCE_FRAMEWORKS TABLE ============
+                ("compliance_frameworks", "key", "VARCHAR(100)"),
+                ("compliance_frameworks", "name", "VARCHAR(255)"),
+                ("compliance_frameworks", "version", "VARCHAR(50)"),
+                ("compliance_frameworks", "description", "TEXT"),
+                ("compliance_frameworks", "is_active", "BOOLEAN DEFAULT TRUE"),
+                ("compliance_frameworks", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                ("compliance_frameworks", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ COMPLIANCE_CONTROLS TABLE ============
+                ("compliance_controls", "framework_id", "UUID REFERENCES compliance_frameworks(id)"),
+                ("compliance_controls", "control_id", "VARCHAR(50)"),
+                ("compliance_controls", "title", "VARCHAR(255)"),
+                ("compliance_controls", "description", "TEXT"),
+                ("compliance_controls", "family", "VARCHAR(100)"),
+                ("compliance_controls", "priority", "VARCHAR(20)"),
+                ("compliance_controls", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ COMPLIANCE_MAPPINGS TABLE ============
+                ("compliance_mappings", "control_id", "UUID REFERENCES compliance_controls(id)"),
+                ("compliance_mappings", "threat_id", "UUID REFERENCES threats(id)"),
+                ("compliance_mappings", "assessment_id", "UUID REFERENCES assessments(id)"),
+                ("compliance_mappings", "status", "VARCHAR(30) DEFAULT 'not_assessed'"),
+                ("compliance_mappings", "notes", "TEXT"),
+                ("compliance_mappings", "evidence_ids", "JSONB DEFAULT '[]'"),
+                ("compliance_mappings", "mapped_by", "VARCHAR(20) DEFAULT 'manual'"),
+                ("compliance_mappings", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                ("compliance_mappings", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
             ]
             
             for table_name, column_name, column_def in schema_updates:
@@ -424,7 +453,7 @@ def create_app() -> FastAPI:
             return {"status": "error", "message": str(e)}
 
     # Include API routers
-    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack, intel
+    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack, intel, compliance
     
     app.include_router(
         assessments.router,
@@ -470,6 +499,11 @@ def create_app() -> FastAPI:
         intel.router,
         prefix="/api/v1/intel",
         tags=["intel"]
+    )
+    app.include_router(
+        compliance.router,
+        prefix="/api/v1/compliance",
+        tags=["compliance"]
     )
 
     # ML routers — only loaded when numpy/scikit-learn/networkx are available
@@ -617,6 +651,30 @@ try:
                     ("active_risks", "outcome_severity", "VARCHAR(20)"),
                     ("active_risks", "days_to_resolution", "INTEGER"),
                     ("active_risks", "false_positive", "BOOLEAN DEFAULT FALSE"),
+                    # Compliance framework tables
+                    ("compliance_frameworks", "key", "VARCHAR(100)"),
+                    ("compliance_frameworks", "name", "VARCHAR(255)"),
+                    ("compliance_frameworks", "version", "VARCHAR(50)"),
+                    ("compliance_frameworks", "description", "TEXT"),
+                    ("compliance_frameworks", "is_active", "BOOLEAN DEFAULT TRUE"),
+                    ("compliance_frameworks", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                    ("compliance_frameworks", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                    ("compliance_controls", "framework_id", "UUID REFERENCES compliance_frameworks(id)"),
+                    ("compliance_controls", "control_id", "VARCHAR(50)"),
+                    ("compliance_controls", "title", "VARCHAR(255)"),
+                    ("compliance_controls", "description", "TEXT"),
+                    ("compliance_controls", "family", "VARCHAR(100)"),
+                    ("compliance_controls", "priority", "VARCHAR(20)"),
+                    ("compliance_controls", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                    ("compliance_mappings", "control_id", "UUID REFERENCES compliance_controls(id)"),
+                    ("compliance_mappings", "threat_id", "UUID REFERENCES threats(id)"),
+                    ("compliance_mappings", "assessment_id", "UUID REFERENCES assessments(id)"),
+                    ("compliance_mappings", "status", "VARCHAR(30) DEFAULT 'not_assessed'"),
+                    ("compliance_mappings", "notes", "TEXT"),
+                    ("compliance_mappings", "evidence_ids", "JSONB DEFAULT '[]'"),
+                    ("compliance_mappings", "mapped_by", "VARCHAR(20) DEFAULT 'manual'"),
+                    ("compliance_mappings", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                    ("compliance_mappings", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 ]
                 for table, column, col_type in schema_updates:
                     existing = [c["name"] for c in inspector.get_columns(table)]

@@ -619,3 +619,59 @@ export interface AssessmentReport {
   top_risks: ThreatReportItem[];
   threats: ThreatReportItem[];
 }
+
+// ── Compliance Framework Types ─────────────────────────────────────────────
+
+export interface ComplianceFramework {
+  id: string;
+  tenant_id: string;
+  key: string;
+  name: string;
+  version?: string;
+  description?: string;
+  is_active: boolean;
+  control_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ComplianceControl {
+  id: string;
+  tenant_id: string;
+  framework_id: string;
+  control_id: string;
+  title: string;
+  description?: string;
+  family?: string;
+  priority?: string;
+  created_at: string;
+}
+
+export interface ComplianceMapping {
+  id: string;
+  tenant_id: string;
+  control_id: string;
+  threat_id?: string;
+  assessment_id?: string;
+  status: 'not_assessed' | 'compliant' | 'non_compliant' | 'partially_compliant' | 'not_applicable';
+  notes?: string;
+  evidence_ids?: string[];
+  mapped_by: 'manual' | 'ai_suggested';
+  created_at: string;
+  updated_at: string;
+  control_detail?: ComplianceControl;
+}
+
+export interface ComplianceSummary {
+  framework_id: string;
+  framework_name: string;
+  framework_key: string;
+  total_controls: number;
+  mapped_controls: number;
+  compliant: number;
+  non_compliant: number;
+  partially_compliant: number;
+  not_applicable: number;
+  not_assessed: number;
+  compliance_pct: number;
+}
