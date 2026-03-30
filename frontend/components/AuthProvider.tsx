@@ -48,11 +48,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       components={{
         Header() {
           return (
-            <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold">Compliance Platform</h1>
-              <p className="text-sm text-muted-foreground mt-2">
-                Threat Risk Assessment & Management
-              </p>
+            <div className="flex justify-center mb-6">
+              <img
+                src="/logo.png"
+                alt="EdgeVision — Intelligent Analytics & Insights"
+                className="h-16 object-contain"
+              />
             </div>
           );
         },

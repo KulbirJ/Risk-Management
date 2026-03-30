@@ -3,11 +3,11 @@
 import { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { 
   LayoutDashboard, 
   FileText, 
   AlertTriangle, 
-  Shield, 
   History,
   Menu,
   LogOut,
@@ -46,12 +46,15 @@ export default function Layout({ children }: LayoutProps) {
       <div className="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200">
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-200">
-            <Shield className="w-8 h-8 text-primary" />
-            <div>
-              <h1 className="text-lg font-bold">Compliance</h1>
-              <p className="text-xs text-muted-foreground">Risk Assessment</p>
-            </div>
+          <div className="flex items-center justify-center px-4 py-3 border-b border-gray-200">
+            <Image
+              src="/logo.png"
+              alt="EdgeVision — Intelligent Analytics & Insights"
+              width={220}
+              height={60}
+              className="object-contain"
+              priority
+            />
           </div>
 
           {/* Navigation */}

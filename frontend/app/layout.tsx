@@ -7,7 +7,7 @@ import Layout from '../components/Layout';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Compliance Platform - Threat Risk Assessment',
+  title: 'EdgeVision — Intelligent Analytics & Insights',
   description: 'Enterprise threat risk assessment and compliance management platform',
 };
 
