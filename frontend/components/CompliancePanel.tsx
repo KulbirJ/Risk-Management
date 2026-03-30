@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Shield, CheckCircle, XCircle, AlertCircle, MinusCircle, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Shield, CheckCircle, XCircle, AlertCircle, MinusCircle, Loader2, ChevronDown, ChevronRight, Zap, AlertTriangle } from 'lucide-react';
 import apiClient from '../lib/api-client';
-import type { ComplianceFramework, ComplianceControl, ComplianceMapping, ComplianceSummary } from '../lib/types';
+import type { ComplianceFramework, ComplianceControl, ComplianceMapping, ComplianceSummary, ComplianceGaps } from '../lib/types';
 
 // ── Status helpers ─────────────────────────────────────────────────────────
 
@@ -34,6 +34,19 @@ function ProgressBar({ value, color = 'bg-green-500' }: { value: number; color?:
   );
 }
 
+function ConfidenceBadge({ score }: { score?: number }) {
+  if (score == null) return null;
+  const color = score >= 90 ? 'text-green-700 bg-green-50' : score >= 70 ? 'text-amber-700 bg-amber-50' : 'text-red-700 bg-red-50';
+  return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${color}`}>{score}%</span>;
+}
+
+function MappedByTag({ mappedBy }: { mappedBy?: string }) {
+  if (!mappedBy || mappedBy === 'manual') return null;
+  const label = mappedBy === 'auto_static' ? 'Static' : 'AI';
+  const cls = mappedBy === 'auto_static' ? 'text-blue-600 bg-blue-50' : 'text-purple-600 bg-purple-50';
+  return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${cls}`}>{label}</span>;
+}
+
 // ── Main Panel ─────────────────────────────────────────────────────────────
 
 interface CompliancePanelProps {
@@ -51,6 +64,9 @@ export function CompliancePanel({ assessmentId, threatIds = [] }: CompliancePane
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [autoMapping, setAutoMapping] = useState(false);
+  const [autoMapResult, setAutoMapResult] = useState<string | null>(null);
+  const [gaps, setGaps] = useState<ComplianceGaps | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -127,6 +143,46 @@ export function CompliancePanel({ assessmentId, threatIds = [] }: CompliancePane
     }
   };
 
+  const handleAutoMap = async () => {
+    if (!selectedFw || threatIds.length === 0) return;
+    const fw = frameworks.find(f => f.id === selectedFw);
+    if (!fw) return;
+
+    setAutoMapping(true);
+    setAutoMapResult(null);
+    let totalSaved = 0;
+    try {
+      for (const tid of threatIds) {
+        const res = await apiClient.autoMapCompliance(tid, fw.key, assessmentId);
+        totalSaved += res.saved_count;
+      }
+      setAutoMapResult(`Mapped ${totalSaved} control(s) across ${threatIds.length} threat(s)`);
+      // Reload controls, mappings, summaries
+      if (selectedFw) {
+        const [ctrls, maps, sums] = await Promise.all([
+          apiClient.listComplianceControls(selectedFw),
+          apiClient.listComplianceMappings({ assessment_id: assessmentId, framework_id: selectedFw }),
+          apiClient.getComplianceSummary(assessmentId),
+        ]);
+        setControls(ctrls);
+        setMappings(maps);
+        setSummaries(sums);
+      }
+    } catch {
+      setAutoMapResult('Auto-mapping failed — check backend logs');
+    } finally {
+      setAutoMapping(false);
+    }
+  };
+
+  // Load gaps when framework changes
+  useEffect(() => {
+    if (!selectedFw) return;
+    const fw = frameworks.find(f => f.id === selectedFw);
+    if (!fw) return;
+    apiClient.getComplianceGaps(fw.key, assessmentId).then(setGaps).catch(() => setGaps(null));
+  }, [selectedFw, frameworks, assessmentId, mappings]);
+
   // Group controls by family
   const families = controls.reduce<Record<string, ComplianceControl[]>>((acc, ctrl) => {
     const fam = ctrl.family || 'Uncategorized';
@@ -198,10 +254,57 @@ export function CompliancePanel({ assessmentId, threatIds = [] }: CompliancePane
               <span className="text-red-600">{s.non_compliant} ✗</span>
               <span className="text-amber-600">{s.partially_compliant} ~</span>
               <span>{s.not_assessed} ?</span>
+              {s.gap_controls > 0 && (
+                <span className="text-orange-600 flex items-center gap-0.5">
+                  <AlertTriangle className="w-3 h-3" /> {s.gap_controls} gaps
+                </span>
+              )}
             </div>
           </button>
         ))}
       </div>
+
+      {/* Auto-Map Bar */}
+      {currentSummary && threatIds.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50 rounded-lg border border-indigo-200">
+          <button
+            onClick={handleAutoMap}
+            disabled={autoMapping}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {autoMapping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+            Auto-Map {threatIds.length} Threat{threatIds.length > 1 ? 's' : ''}
+          </button>
+          <span className="text-xs text-indigo-700">
+            Maps threats to {currentSummary.framework_name} controls (static + AI)
+          </span>
+          {autoMapResult && (
+            <span className="ml-auto text-xs text-green-700 bg-green-50 px-2 py-1 rounded">{autoMapResult}</span>
+          )}
+        </div>
+      )}
+
+      {/* Gap Summary */}
+      {gaps && gaps.gap_count > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="w-4 h-4 text-orange-600" />
+            <span className="text-sm font-medium text-orange-800">
+              {gaps.gap_count} Unmapped Control{gaps.gap_count > 1 ? 's' : ''} (Compliance Gaps)
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {gaps.gap_controls.slice(0, 20).map(g => (
+              <span key={g.control_id} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-mono">
+                {g.control_id}
+              </span>
+            ))}
+            {gaps.gap_count > 20 && (
+              <span className="text-[10px] text-orange-500">+{gaps.gap_count - 20} more</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Controls by Family */}
       {currentSummary && (
@@ -228,6 +331,7 @@ export function CompliancePanel({ assessmentId, threatIds = [] }: CompliancePane
                         <tr className="text-xs text-gray-500 border-b border-gray-200">
                           <th className="text-left py-2 font-medium w-24">Control</th>
                           <th className="text-left py-2 font-medium">Title</th>
+                          <th className="text-left py-2 font-medium w-20">Source</th>
                           <th className="text-left py-2 font-medium w-40">Status</th>
                         </tr>
                       </thead>
@@ -239,6 +343,12 @@ export function CompliancePanel({ assessmentId, threatIds = [] }: CompliancePane
                             <tr key={ctrl.id} className="border-b border-gray-100 last:border-0">
                               <td className="py-2 font-mono text-xs text-gray-600">{ctrl.control_id}</td>
                               <td className="py-2 text-gray-800">{ctrl.title}</td>
+                              <td className="py-2">
+                                <div className="flex items-center gap-1">
+                                  <MappedByTag mappedBy={mapping?.mapped_by} />
+                                  <ConfidenceBadge score={mapping?.confidence_score} />
+                                </div>
+                              </td>
                               <td className="py-2">
                                 {savingId === ctrl.id ? (
                                   <Loader2 className="w-4 h-4 animate-spin text-gray-400" />

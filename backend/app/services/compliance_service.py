@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..models.models import (
     ComplianceFramework, ComplianceControl, ComplianceMapping,
-    Threat, Assessment, AuditLog,
+    ThreatControlDefault, Threat, Assessment, AuditLog,
 )
 
 logger = logging.getLogger(__name__)
@@ -210,8 +210,76 @@ def get_compliance_summary(
             "not_applicable": na,
             "not_assessed": not_assessed,
             "compliance_pct": pct,
+            "gap_controls": total - mapped,
         })
     return summaries
+
+
+# ═══ Gap Analysis ═══════════════════════════════════════════════════════════
+
+def get_compliance_gaps(
+    db: Session,
+    tenant_id: str,
+    framework_key: str,
+    assessment_id=None,
+) -> dict:
+    """Return controls in a framework that have NO compliance mappings (gaps).
+
+    Returns: {framework_key, total_controls, gap_count, gap_controls: [{control_id, title, family}]}
+    """
+    from sqlalchemy import and_, exists as sa_exists
+
+    fw = db.execute(
+        select(ComplianceFramework).where(
+            ComplianceFramework.tenant_id == tenant_id,
+            ComplianceFramework.key == framework_key,
+        )
+    ).scalar_one_or_none()
+    if not fw:
+        return {"framework_key": framework_key, "total_controls": 0, "gap_count": 0, "gap_controls": []}
+
+    # Subquery: controls that DO have at least one mapping
+    mapping_exists = sa_exists(
+        select(ComplianceMapping.id).where(
+            ComplianceMapping.tenant_id == tenant_id,
+            ComplianceMapping.control_id == ComplianceControl.id,
+            *(
+                [ComplianceMapping.assessment_id == assessment_id]
+                if assessment_id
+                else []
+            ),
+        )
+    )
+
+    # Controls with NO mapping
+    gap_ctrls = db.execute(
+        select(ComplianceControl).where(
+            ComplianceControl.tenant_id == tenant_id,
+            ComplianceControl.framework_id == fw.id,
+            ~mapping_exists,
+        )
+    ).scalars().all()
+
+    total = db.execute(
+        select(func.count(ComplianceControl.id)).where(
+            ComplianceControl.tenant_id == tenant_id,
+            ComplianceControl.framework_id == fw.id,
+        )
+    ).scalar() or 0
+
+    return {
+        "framework_key": framework_key,
+        "total_controls": total,
+        "gap_count": len(gap_ctrls),
+        "gap_controls": [
+            {
+                "control_id": c.control_id,
+                "title": c.title,
+                "family": c.family,
+            }
+            for c in gap_ctrls
+        ],
+    }
 
 
 # ═══ Seed frameworks with controls ═════════════════════════════════════════
@@ -406,3 +474,144 @@ _FRAMEWORK_SEED_DATA = [
         ],
     },
 ]
+
+
+# ═══ Threat ↔ Control Default Mappings ══════════════════════════════════════
+# Maps each threat catalogue_key to the most relevant control_id_refs per framework.
+# Used by the auto-mapping engine as the static (high-confidence) layer.
+
+_THREAT_CONTROL_DEFAULTS = {
+    "malicious_code": {
+        "nist-800-53": ["SI-3", "SI-2", "CM-7", "SI-4"],
+        "iso-27001": ["A.8.7", "A.8.8", "A.8.16"],
+        "cis-v8": ["CIS-10", "CIS-7", "CIS-2"],
+    },
+    "social_engineering_phishing": {
+        "nist-800-53": ["AC-7", "IA-2", "SI-4", "IR-4"],
+        "iso-27001": ["A.6.3", "A.8.5", "A.5.24"],
+        "cis-v8": ["CIS-14", "CIS-9", "CIS-17"],
+    },
+    "mitm_eavesdropping": {
+        "nist-800-53": ["SC-8", "SC-12", "SC-13", "AC-17"],
+        "iso-27001": ["A.8.24", "A.8.20", "A.8.5"],
+        "cis-v8": ["CIS-3", "CIS-12", "CIS-13"],
+    },
+    "password_cracking": {
+        "nist-800-53": ["IA-5", "IA-2", "AC-7", "AC-2"],
+        "iso-27001": ["A.8.5", "A.8.2", "A.8.3"],
+        "cis-v8": ["CIS-5", "CIS-6", "CIS-4"],
+    },
+    "system_penetration_hacking": {
+        "nist-800-53": ["SI-2", "RA-5", "SC-7", "AC-3"],
+        "iso-27001": ["A.8.8", "A.8.20", "A.8.3"],
+        "cis-v8": ["CIS-7", "CIS-12", "CIS-18"],
+    },
+    "dos_disruption": {
+        "nist-800-53": ["SC-7", "SI-4", "IR-4", "IR-5"],
+        "iso-27001": ["A.8.20", "A.8.16", "A.5.29", "A.5.30"],
+        "cis-v8": ["CIS-12", "CIS-13", "CIS-17"],
+    },
+    "unauthorized_access": {
+        "nist-800-53": ["AC-3", "AC-6", "AC-2", "AU-2"],
+        "iso-27001": ["A.8.3", "A.8.2", "A.5.3"],
+        "cis-v8": ["CIS-6", "CIS-5", "CIS-8"],
+    },
+    "data_loss_leakage": {
+        "nist-800-53": ["SC-28", "AC-4", "AU-2", "SC-8"],
+        "iso-27001": ["A.8.12", "A.8.24", "A.5.10"],
+        "cis-v8": ["CIS-3", "CIS-11", "CIS-8"],
+    },
+    "insider_threats": {
+        "nist-800-53": ["AC-5", "AC-6", "AU-6", "AU-2"],
+        "iso-27001": ["A.5.3", "A.6.1", "A.6.5", "A.8.15"],
+        "cis-v8": ["CIS-6", "CIS-8", "CIS-14"],
+    },
+    "supply_chain_attacks": {
+        "nist-800-53": ["CM-8", "RA-3", "SI-2", "CM-2"],
+        "iso-27001": ["A.5.23", "A.8.25", "A.5.8"],
+        "cis-v8": ["CIS-2", "CIS-15", "CIS-16"],
+    },
+    "apt": {
+        "nist-800-53": ["SI-4", "IR-4", "AU-6", "RA-5"],
+        "iso-27001": ["A.5.7", "A.8.16", "A.5.24", "A.5.25"],
+        "cis-v8": ["CIS-13", "CIS-17", "CIS-8", "CIS-18"],
+    },
+    "ransomware": {
+        "nist-800-53": ["SI-3", "SC-28", "IR-4", "SI-2"],
+        "iso-27001": ["A.8.7", "A.8.12", "A.5.29", "A.5.30"],
+        "cis-v8": ["CIS-10", "CIS-11", "CIS-3", "CIS-17"],
+    },
+    "zero_day": {
+        "nist-800-53": ["RA-5", "SI-2", "SI-4", "SC-7"],
+        "iso-27001": ["A.8.8", "A.8.16", "A.5.7"],
+        "cis-v8": ["CIS-7", "CIS-13", "CIS-18"],
+    },
+    "web_app_attacks": {
+        "nist-800-53": ["SI-2", "RA-5", "CM-6", "SC-7"],
+        "iso-27001": ["A.8.28", "A.8.25", "A.8.8"],
+        "cis-v8": ["CIS-16", "CIS-7", "CIS-4"],
+    },
+    "physical_breach": {
+        "nist-800-53": ["AC-17", "AU-2", "CM-8"],
+        "iso-27001": ["A.7.1", "A.7.4", "A.8.1"],
+        "cis-v8": ["CIS-1", "CIS-8", "CIS-6"],
+    },
+    "malware_removable_media": {
+        "nist-800-53": ["SI-3", "CM-7", "AC-3"],
+        "iso-27001": ["A.8.7", "A.8.1", "A.8.9"],
+        "cis-v8": ["CIS-10", "CIS-1", "CIS-4"],
+    },
+    "misconfiguration": {
+        "nist-800-53": ["CM-6", "CM-2", "CM-7", "CM-8"],
+        "iso-27001": ["A.8.9", "A.8.8", "A.5.2"],
+        "cis-v8": ["CIS-4", "CIS-1", "CIS-2"],
+    },
+    "cloud_security": {
+        "nist-800-53": ["AC-4", "SC-7", "CM-6", "AC-2"],
+        "iso-27001": ["A.5.23", "A.8.3", "A.8.20"],
+        "cis-v8": ["CIS-3", "CIS-6", "CIS-15"],
+    },
+    "iot_ot_threats": {
+        "nist-800-53": ["CM-8", "SC-7", "SI-4", "AC-3"],
+        "iso-27001": ["A.8.1", "A.8.9", "A.8.20"],
+        "cis-v8": ["CIS-1", "CIS-12", "CIS-13"],
+    },
+}
+
+
+def seed_threat_control_defaults(db: Session, tenant_id: str) -> dict:
+    """Seed the static threat→control default mappings for all frameworks.
+    Uses tenant_id=NULL for global defaults."""
+    from sqlalchemy import exists
+
+    results = {"defaults_created": 0, "skipped": 0}
+
+    for cat_key, fw_map in _THREAT_CONTROL_DEFAULTS.items():
+        for fw_key, control_ids in fw_map.items():
+            for ctrl_ref in control_ids:
+                already = db.execute(
+                    select(
+                        exists().where(
+                            ThreatControlDefault.catalogue_key == cat_key,
+                            ThreatControlDefault.framework_key == fw_key,
+                            ThreatControlDefault.control_id_ref == ctrl_ref,
+                            ThreatControlDefault.tenant_id == None,  # noqa: E711 — global
+                        )
+                    )
+                ).scalar()
+                if already:
+                    results["skipped"] += 1
+                    continue
+
+                db.add(ThreatControlDefault(
+                    tenant_id=None,
+                    catalogue_key=cat_key,
+                    framework_key=fw_key,
+                    control_id_ref=ctrl_ref,
+                    confidence=90,
+                ))
+                results["defaults_created"] += 1
+
+    db.commit()
+    logger.info(f"Seeded threat-control defaults: {results}")
+    return results

@@ -853,6 +853,7 @@ class ComplianceMappingBase(BaseModel):
     notes: Optional[str] = None
     evidence_ids: Optional[list] = []
     mapped_by: Optional[str] = "manual"
+    confidence_score: Optional[int] = None
 
 class ComplianceMappingCreate(ComplianceMappingBase):
     pass
@@ -886,3 +887,4 @@ class ComplianceSummary(BaseModel):
     not_applicable: int = 0
     not_assessed: int = 0
     compliance_pct: float = 0.0
+    gap_controls: int = 0

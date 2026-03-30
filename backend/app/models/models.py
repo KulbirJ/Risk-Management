@@ -524,6 +524,24 @@ class ComplianceMapping(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    confidence_score = Column(Integer, nullable=True)              # 0-100, set by auto-mapping engine
     control = relationship("ComplianceControl", back_populates="mappings")
     threat = relationship("Threat")
     assessment = relationship("Assessment")
+
+
+class ThreatControlDefault(Base):
+    """Static mapping: threat catalogue category → compliance control.
+    Seeded per framework. Used by the auto-mapping engine before Bedrock fallback."""
+    __tablename__ = "threat_control_defaults"
+    __table_args__ = (
+        UniqueConstraint("catalogue_key", "framework_key", "control_id_ref", name="uq_tcd_cat_fw_ctrl"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True)  # NULL = global default
+    catalogue_key = Column(String(100), nullable=False, index=True)   # threat catalogue category key
+    framework_key = Column(String(50), nullable=False, index=True)    # e.g. "nist-800-53"
+    control_id_ref = Column(String(50), nullable=False)               # e.g. "AC-2", "A.8.7", "CIS-10"
+    confidence = Column(Integer, default=90)                          # static confidence score
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

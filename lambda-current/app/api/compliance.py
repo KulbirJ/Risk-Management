@@ -12,6 +12,7 @@ from ..schemas.schemas import (
     ComplianceSummary,
 )
 from ..services import compliance_service
+from ..services import compliance_mapping_engine
 
 router = APIRouter()
 
@@ -175,3 +176,57 @@ def compliance_summary(
     return compliance_service.get_compliance_summary(
         db, str(tenant_id), assessment_id=assessment_id,
     )
+
+
+# ── Auto-Mapping ────────────────────────────────────────────────────────────
+
+@router.post("/auto-map")
+def auto_map_compliance(
+    threat_id: UUID = Query(..., description="Threat to auto-map"),
+    framework_key: str = Query(..., description="Framework key (e.g. nist-800-53)"),
+    assessment_id: Optional[UUID] = Query(None),
+    db: Session = Depends(get_db),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context),
+):
+    """Run intelligent auto-mapping for a threat against a compliance framework."""
+    tenant_id, user_id = context
+    try:
+        result = compliance_mapping_engine.run_auto_mapping(
+            db=db,
+            tenant_id=str(tenant_id),
+            user_id=str(user_id),
+            threat_id=threat_id,
+            framework_key=framework_key,
+            assessment_id=assessment_id,
+        )
+        return {"status": "ok", **result}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/seed-defaults")
+def seed_defaults(
+    db: Session = Depends(get_db),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context),
+):
+    """Seed the static threat→control default mapping table."""
+    tenant_id, _ = context
+    result = compliance_service.seed_threat_control_defaults(db, str(tenant_id))
+    return {"status": "ok", **result}
+
+
+# ── Gap Analysis ────────────────────────────────────────────────────────────
+
+@router.get("/gaps")
+def compliance_gaps(
+    framework_key: str = Query(..., description="Framework key"),
+    assessment_id: Optional[UUID] = Query(None),
+    db: Session = Depends(get_db),
+    context: tuple[UUID, UUID] = Depends(get_tenant_context),
+):
+    """Return controls that are NOT mapped to any threat (compliance gaps)."""
+    tenant_id, _ = context
+    gaps = compliance_service.get_compliance_gaps(
+        db, str(tenant_id), framework_key, assessment_id=assessment_id,
+    )
+    return gaps

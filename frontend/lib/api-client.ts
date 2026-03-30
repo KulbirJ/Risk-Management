@@ -42,6 +42,8 @@ import type {
   ComplianceControl,
   ComplianceMapping,
   ComplianceSummary,
+  ComplianceGaps,
+  ComplianceAutoMapResult,
 } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -684,6 +686,29 @@ class APIClient {
   async getComplianceSummary(assessmentId?: string): Promise<ComplianceSummary[]> {
     const { data } = await this.client.get('/compliance/summary', {
       params: assessmentId ? { assessment_id: assessmentId } : undefined,
+    });
+    return data;
+  }
+
+  async autoMapCompliance(
+    threatId: string,
+    frameworkKey: string,
+    assessmentId?: string,
+  ): Promise<ComplianceAutoMapResult> {
+    const { data } = await this.client.post('/compliance/auto-map', null, {
+      params: { threat_id: threatId, framework_key: frameworkKey, ...(assessmentId && { assessment_id: assessmentId }) },
+    });
+    return data;
+  }
+
+  async seedComplianceDefaults(): Promise<{ status: string; defaults_created: number; skipped: number }> {
+    const { data } = await this.client.post('/compliance/seed-defaults');
+    return data;
+  }
+
+  async getComplianceGaps(frameworkKey: string, assessmentId?: string): Promise<ComplianceGaps> {
+    const { data } = await this.client.get('/compliance/gaps', {
+      params: { framework_key: frameworkKey, ...(assessmentId && { assessment_id: assessmentId }) },
     });
     return data;
   }

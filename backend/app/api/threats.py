@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ..db.database import get_db
 from ..schemas.schemas import ThreatCreate, ThreatRead, ThreatPatch
 from ..services.threat_service import ThreatService
+from ..services import compliance_mapping_engine
 
 router = APIRouter()
 
@@ -23,6 +24,7 @@ def get_tenant_context(
 def create_threat(
     threat: ThreatCreate,
     assessment_id: UUID = Query(..., description="Assessment ID to link threat to"),
+    compliance_framework: Optional[str] = Query(None, description="Auto-map to this framework key (e.g. nist-800-53)"),
     db: Session = Depends(get_db),
     context: tuple[UUID, UUID] = Depends(get_tenant_context)
 ):
@@ -35,6 +37,7 @@ def create_threat(
     
     Query parameters:
     - assessment_id: UUID of the assessment this threat belongs to
+    - compliance_framework: (optional) auto-map threat to this compliance framework
     """
     tenant_id, user_id = context
     
@@ -46,6 +49,24 @@ def create_threat(
             tenant_id=tenant_id,
             user_id=user_id
         )
+
+        # Auto-map to compliance framework if requested
+        if compliance_framework:
+            try:
+                compliance_mapping_engine.run_auto_mapping(
+                    db=db,
+                    tenant_id=str(tenant_id),
+                    user_id=str(user_id),
+                    threat_id=created_threat.id,
+                    framework_key=compliance_framework,
+                    assessment_id=assessment_id,
+                )
+            except Exception as map_err:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Auto-mapping failed for threat {created_threat.id}: {map_err}"
+                )
+
         return created_threat
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

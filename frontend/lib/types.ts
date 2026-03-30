@@ -656,7 +656,8 @@ export interface ComplianceMapping {
   status: 'not_assessed' | 'compliant' | 'non_compliant' | 'partially_compliant' | 'not_applicable';
   notes?: string;
   evidence_ids?: string[];
-  mapped_by: 'manual' | 'ai_suggested';
+  mapped_by: 'manual' | 'auto_static' | 'ai_suggested';
+  confidence_score?: number;
   created_at: string;
   updated_at: string;
   control_detail?: ComplianceControl;
@@ -674,4 +675,22 @@ export interface ComplianceSummary {
   not_applicable: number;
   not_assessed: number;
   compliance_pct: number;
+  gap_controls: number;
+}
+
+export interface ComplianceGaps {
+  framework_key: string;
+  total_controls: number;
+  gap_count: number;
+  gap_controls: { control_id: string; title: string; family?: string }[];
+}
+
+export interface ComplianceAutoMapResult {
+  status: string;
+  threat_id: string;
+  framework_key: string;
+  static_count: number;
+  ai_count: number;
+  saved_count: number;
+  skipped: number;
 }

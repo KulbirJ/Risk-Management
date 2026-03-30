@@ -402,8 +402,17 @@ def create_app() -> FastAPI:
                 ("compliance_mappings", "notes", "TEXT"),
                 ("compliance_mappings", "evidence_ids", "JSONB DEFAULT '[]'"),
                 ("compliance_mappings", "mapped_by", "VARCHAR(20) DEFAULT 'manual'"),
+                ("compliance_mappings", "confidence_score", "INTEGER"),
                 ("compliance_mappings", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 ("compliance_mappings", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                
+                # ============ THREAT_CONTROL_DEFAULTS TABLE ============
+                ("threat_control_defaults", "tenant_id", "UUID REFERENCES tenants(id)"),
+                ("threat_control_defaults", "catalogue_key", "VARCHAR(100) NOT NULL"),
+                ("threat_control_defaults", "framework_key", "VARCHAR(50) NOT NULL"),
+                ("threat_control_defaults", "control_id_ref", "VARCHAR(50) NOT NULL"),
+                ("threat_control_defaults", "confidence", "INTEGER DEFAULT 90"),
+                ("threat_control_defaults", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
             ]
             
             for table_name, column_name, column_def in schema_updates:
@@ -701,8 +710,16 @@ try:
                     ("compliance_mappings", "notes", "TEXT"),
                     ("compliance_mappings", "evidence_ids", "JSONB DEFAULT '[]'"),
                     ("compliance_mappings", "mapped_by", "VARCHAR(20) DEFAULT 'manual'"),
+                    ("compliance_mappings", "confidence_score", "INTEGER"),
                     ("compliance_mappings", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                     ("compliance_mappings", "updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+                    # Threat-control default mappings
+                    ("threat_control_defaults", "tenant_id", "UUID REFERENCES tenants(id)"),
+                    ("threat_control_defaults", "catalogue_key", "VARCHAR(100) NOT NULL"),
+                    ("threat_control_defaults", "framework_key", "VARCHAR(50) NOT NULL"),
+                    ("threat_control_defaults", "control_id_ref", "VARCHAR(50) NOT NULL"),
+                    ("threat_control_defaults", "confidence", "INTEGER DEFAULT 90"),
+                    ("threat_control_defaults", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
                 ]
                 for table, column, col_type in schema_updates:
                     existing = [c["name"] for c in inspector.get_columns(table)]

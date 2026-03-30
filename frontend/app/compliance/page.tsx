@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Shield, Loader2, ChevronDown, ChevronRight, Download, Plus } from 'lucide-react';
+import { Shield, Loader2, ChevronDown, ChevronRight, Download, Plus, AlertTriangle } from 'lucide-react';
 import apiClient from '../../lib/api-client';
 import type { ComplianceFramework, ComplianceControl, ComplianceMapping, ComplianceSummary } from '../../lib/types';
 
@@ -165,6 +165,12 @@ export default function CompliancePage() {
                 <div><span className="font-bold text-amber-600">{s.partially_compliant}</span><br /><span className="text-gray-500">Partial</span></div>
                 <div><span className="font-bold text-gray-500">{s.not_assessed}</span><br /><span className="text-gray-500">Unassessed</span></div>
               </div>
+              {s.gap_controls > 0 && (
+                <div className="mt-2 flex items-center gap-1 text-xs text-orange-600">
+                  <AlertTriangle className="w-3 h-3" />
+                  {s.gap_controls} unmapped gap{s.gap_controls > 1 ? 's' : ''}
+                </div>
+              )}
             </button>
           );
         })}
@@ -201,6 +207,7 @@ export default function CompliancePage() {
                           <tr className="text-xs text-gray-500 border-b border-gray-200">
                             <th className="text-left py-2 w-24">ID</th>
                             <th className="text-left py-2">Title</th>
+                            <th className="text-left py-2 w-20">Source</th>
                             <th className="text-left py-2 w-44">Status</th>
                           </tr>
                         </thead>
@@ -213,6 +220,16 @@ export default function CompliancePage() {
                               <tr key={ctrl.id} className="border-b border-gray-100 last:border-0">
                                 <td className="py-2 font-mono text-xs text-gray-600">{ctrl.control_id}</td>
                                 <td className="py-2 text-gray-800">{ctrl.title}</td>
+                                <td className="py-2">
+                                  {mapping?.mapped_by && mapping.mapped_by !== 'manual' && (
+                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                                      mapping.mapped_by === 'auto_static' ? 'text-blue-600 bg-blue-50' : 'text-purple-600 bg-purple-50'
+                                    }`}>
+                                      {mapping.mapped_by === 'auto_static' ? 'Static' : 'AI'}
+                                      {mapping.confidence_score != null && ` ${mapping.confidence_score}%`}
+                                    </span>
+                                  )}
+                                </td>
                                 <td className="py-2">
                                   {savingId === ctrl.id ? (
                                     <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
