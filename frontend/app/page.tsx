@@ -209,7 +209,15 @@ export default function DashboardPage() {
               <p className="text-center text-gray-500 py-8">No assessments yet</p>
             ) : (
               <div className="space-y-4">
-                {recentAssessments.map((assessment) => (
+                {recentAssessments.map((assessment) => {
+                  const assessThreats = allThreats.filter(t => t.assessment_id === assessment.id);
+                  const sevCounts = assessThreats.reduce((acc, t) => {
+                    const s = t.severity || 'Medium';
+                    acc[s] = (acc[s] || 0) + 1;
+                    return acc;
+                  }, {} as Record<string, number>);
+                  const total = assessThreats.length;
+                  return (
                   <Link
                     key={assessment.id}
                     href={`/assessments/${assessment.id}`}
@@ -227,8 +235,33 @@ export default function DashboardPage() {
                       </div>
                       <StatusBadge status={assessment.status} />
                     </div>
+                    {/* Severity distribution mini-bar */}
+                    {total > 0 && (
+                      <div className="mt-2.5">
+                        <div className="flex h-1.5 rounded-full overflow-hidden">
+                          {(sevCounts['Critical'] || 0) > 0 && (
+                            <div className="bg-red-500" style={{ width: `${(sevCounts['Critical'] / total) * 100}%` }} />
+                          )}
+                          {(sevCounts['High'] || 0) > 0 && (
+                            <div className="bg-orange-400" style={{ width: `${(sevCounts['High'] / total) * 100}%` }} />
+                          )}
+                          {(sevCounts['Medium'] || 0) > 0 && (
+                            <div className="bg-yellow-400" style={{ width: `${(sevCounts['Medium'] / total) * 100}%` }} />
+                          )}
+                          {(sevCounts['Low'] || 0) > 0 && (
+                            <div className="bg-green-400" style={{ width: `${(sevCounts['Low'] / total) * 100}%` }} />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          {total} threat{total !== 1 ? 's' : ''}
+                          {(sevCounts['Critical'] || 0) > 0 ? ` · ${sevCounts['Critical']} crit` : ''}
+                          {(sevCounts['High'] || 0) > 0 ? ` · ${sevCounts['High']} high` : ''}
+                        </p>
+                      </div>
+                    )}
                   </Link>
-                ))}
+                  );
+                })}
               </div>
             )}
             <div className="mt-4 text-center">

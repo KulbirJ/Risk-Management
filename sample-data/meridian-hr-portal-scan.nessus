@@ -1,0 +1,405 @@
+<?xml version="1.0" ?>
+<NessusClientData_v2>
+  <Policy>
+    <policyName>Advanced Network Scan</policyName>
+  </Policy>
+  <Report name="Meridian HR Portal - Internal Scan" xmlns:cm="http://www.nessus.org/cm">
+
+    <!-- ============================================================ -->
+    <!-- HOST: 10.0.50.10 — Meridian HR Portal (Windows 2008 R2)     -->
+    <!-- ============================================================ -->
+    <ReportHost name="10.0.50.10">
+      <HostProperties>
+        <tag name="HOST_START">Tue Feb  4 09:00:00 2026</tag>
+        <tag name="HOST_END">Tue Feb  4 09:42:17 2026</tag>
+        <tag name="host-ip">10.0.50.10</tag>
+        <tag name="host-fqdn">meridian-hr.corp.local</tag>
+        <tag name="operating-system">Microsoft Windows Server 2008 R2 Standard Service Pack 1</tag>
+        <tag name="netbios-name">MERIDIAN-HR</tag>
+        <tag name="mac-address">00:50:56:a1:2c:3f</tag>
+      </HostProperties>
+
+      <!-- ========== CRITICAL — MS17-010 EternalBlue (SMBv1 RCE) ========== -->
+      <ReportItem port="445" svc_name="cifs" protocol="tcp" severity="4" pluginID="97833" pluginName="MS17-010: Security Update for Microsoft Windows SMB Server (4013389) (EternalBlue)" pluginFamily="Windows">
+        <agent>all</agent>
+        <description>The remote Windows host is affected by multiple vulnerabilities in Microsoft Server Message Block 1.0 (SMBv1). An unauthenticated, remote attacker can exploit these vulnerabilities to execute arbitrary code on the target host. The EternalBlue exploit is widely used by ransomware (WannaCry, NotPetya) and penetration tools.</description>
+        <fname>smb_nt_ms17-010.nasl</fname>
+        <plugin_modification_date>2024/06/17</plugin_modification_date>
+        <plugin_publication_date>2017/03/15</plugin_publication_date>
+        <plugin_type>local</plugin_type>
+        <risk_factor>Critical</risk_factor>
+        <solution>Microsoft no longer provides patches for Windows Server 2008 R2 (end of support January 14, 2020). Migrate to a supported operating system.</solution>
+        <synopsis>The remote Windows host is affected by multiple remote code execution vulnerabilities.</synopsis>
+        <cvss3_base_score>9.8</cvss3_base_score>
+        <cvss3_vector>CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector>
+        <cvss_base_score>10.0</cvss_base_score>
+        <cve>CVE-2017-0143</cve>
+        <cve>CVE-2017-0144</cve>
+        <cve>CVE-2017-0145</cve>
+        <cve>CVE-2017-0146</cve>
+        <cve>CVE-2017-0148</cve>
+        <xref>MSFT:MS17-010</xref>
+        <plugin_output>
+The remote host is running Windows Server 2008 R2 SP1 with SMBv1 enabled.
+The following CVEs are confirmed exploitable:
+  - CVE-2017-0144 (EternalBlue)
+  - CVE-2017-0145 (EternalRomance)
+Path: \\10.0.50.10\IPC$
+SMBv1 Status: Enabled
+        </plugin_output>
+        <exploit_available>true</exploit_available>
+        <exploited_by_malware>true</exploited_by_malware>
+      </ReportItem>
+
+      <!-- ========== CRITICAL — BlueKeep RDP RCE ========== -->
+      <ReportItem port="3389" svc_name="msrdp" protocol="tcp" severity="4" pluginID="125313" pluginName="Microsoft Windows Remote Desktop Services Remote Code Execution (BlueKeep)" pluginFamily="Windows">
+        <description>The remote Windows host is affected by a remote code execution vulnerability in Remote Desktop Services (CVE-2019-0708), also known as BlueKeep. An unauthenticated attacker can connect to the target via RDP and send specially crafted requests to execute arbitrary code. Network Level Authentication (NLA) is disabled on this host, increasing exposure.</description>
+        <risk_factor>Critical</risk_factor>
+        <solution>No patch is available for Windows Server 2008 R2 going forward. Disable RDP or migrate to a supported operating system. Enable NLA as a partial mitigation.</solution>
+        <synopsis>The remote host is affected by a remote code execution vulnerability in RDP (BlueKeep).</synopsis>
+        <cvss3_base_score>9.8</cvss3_base_score>
+        <cvss3_vector>CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector>
+        <cvss_base_score>10.0</cvss_base_score>
+        <cve>CVE-2019-0708</cve>
+        <plugin_output>
+Remote Desktop Protocol is enabled on port 3389.
+Network Level Authentication (NLA): Disabled
+The remote host is vulnerable to CVE-2019-0708 (BlueKeep).
+        </plugin_output>
+        <exploit_available>true</exploit_available>
+        <exploited_by_malware>true</exploited_by_malware>
+      </ReportItem>
+
+      <!-- ========== CRITICAL — Apache 2.2.x Multiple Vulns ========== -->
+      <ReportItem port="80" svc_name="www" protocol="tcp" severity="4" pluginID="106256" pluginName="Apache 2.2.x &lt; 2.2.35 Multiple Vulnerabilities" pluginFamily="Web Servers">
+        <description>The version of Apache HTTP Server running on the remote host is 2.2.34. It is therefore affected by multiple critical vulnerabilities including buffer overflow (CVE-2017-7679), use-after-free (CVE-2017-9798 / Optionsbleed), and request smuggling (CVE-2015-3183). Apache 2.2.x branch is end-of-life and receives no further patches.</description>
+        <risk_factor>Critical</risk_factor>
+        <solution>Upgrade to Apache 2.4.x (latest stable). The 2.2.x branch is end-of-life.</solution>
+        <synopsis>The remote web server is running an end-of-life version of Apache with multiple known vulnerabilities.</synopsis>
+        <cvss3_base_score>9.8</cvss3_base_score>
+        <cvss3_vector>CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector>
+        <cvss_base_score>10.0</cvss_base_score>
+        <cve>CVE-2017-7679</cve>
+        <cve>CVE-2017-9798</cve>
+        <cve>CVE-2017-7668</cve>
+        <cve>CVE-2017-3169</cve>
+        <cve>CVE-2017-3167</cve>
+        <cve>CVE-2015-3183</cve>
+        <plugin_output>
+Installed version : 2.2.34
+End-of-life branch: 2.2.x (no patches after December 2017)
+Server Header: Apache/2.2.34 (Win32) mod_ssl/2.2.34 OpenSSL/1.0.2u PHP/5.6.40
+Number of known CVEs: 47
+        </plugin_output>
+        <exploit_available>true</exploit_available>
+      </ReportItem>
+
+      <!-- ========== CRITICAL — Apache on HTTPS as well ========== -->
+      <ReportItem port="443" svc_name="www" protocol="tcp" severity="4" pluginID="106256" pluginName="Apache 2.2.x &lt; 2.2.35 Multiple Vulnerabilities" pluginFamily="Web Servers">
+        <description>The version of Apache HTTP Server running on the remote host is 2.2.34 (HTTPS). Same vulnerabilities as HTTP instance.</description>
+        <risk_factor>Critical</risk_factor>
+        <solution>Upgrade to Apache 2.4.x (latest stable).</solution>
+        <synopsis>The remote web server is running an end-of-life version of Apache with multiple known vulnerabilities.</synopsis>
+        <cvss3_base_score>9.8</cvss3_base_score>
+        <cvss3_vector>CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector>
+        <cvss_base_score>10.0</cvss_base_score>
+        <cve>CVE-2017-7679</cve>
+        <cve>CVE-2017-9798</cve>
+        <plugin_output>
+Installed version : 2.2.34
+End-of-life branch: 2.2.x
+        </plugin_output>
+        <exploit_available>true</exploit_available>
+      </ReportItem>
+
+      <!-- ========== CRITICAL — OpenSSL 1.0.2 Multiple Vulns ========== -->
+      <ReportItem port="443" svc_name="www" protocol="tcp" severity="4" pluginID="132700" pluginName="OpenSSL 1.0.2u End of Life / Multiple Vulnerabilities" pluginFamily="Web Servers">
+        <description>The remote host is running OpenSSL 1.0.2u, which reached end of life on December 31, 2019. It is affected by multiple vulnerabilities including CVE-2020-1971 (NULL pointer dereference DoS), CVE-2021-3449 (signature_algorithms processing crash), and CVE-2022-0778 (infinite loop in BN_mod_sqrt). No further patches will be issued for this branch.</description>
+        <risk_factor>Critical</risk_factor>
+        <solution>Upgrade to OpenSSL 3.x or a supported 1.1.1 branch.</solution>
+        <synopsis>The remote host is running an end-of-life version of OpenSSL with known vulnerabilities.</synopsis>
+        <cvss3_base_score>9.1</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:H</cvss3_vector>
+        <cvss_base_score>7.5</cvss_base_score>
+        <cve>CVE-2020-1971</cve>
+        <cve>CVE-2021-3449</cve>
+        <cve>CVE-2022-0778</cve>
+        <plugin_output>
+Installed OpenSSL version : 1.0.2u
+End of life date           : 2019-12-31
+Cipher suites supporting TLS 1.0: YES
+Cipher suites supporting TLS 1.1: YES
+Cipher suites supporting SSLv3 : YES (POODLE vulnerable)
+        </plugin_output>
+        <exploit_available>true</exploit_available>
+      </ReportItem>
+
+      <!-- ========== CRITICAL — PHP 5.6.x End of Life ========== -->
+      <ReportItem port="80" svc_name="www" protocol="tcp" severity="4" pluginID="121095" pluginName="PHP 5.6.x End of Life Unsupported Version Detection" pluginFamily="CGI abuses">
+        <description>The remote web server uses PHP 5.6.40, which reached end of life on December 31, 2018. PHP 5.6 has over 100 known CVEs including remote code execution, type confusion, and memory corruption vulnerabilities. No patches or security fixes are available.</description>
+        <risk_factor>Critical</risk_factor>
+        <solution>Upgrade to PHP 8.2 or later.</solution>
+        <synopsis>An unsupported version of PHP is installed on the remote host.</synopsis>
+        <cvss3_base_score>9.8</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector>
+        <cvss_base_score>10.0</cvss_base_score>
+        <cve>CVE-2019-11043</cve>
+        <cve>CVE-2019-9675</cve>
+        <cve>CVE-2018-20783</cve>
+        <plugin_output>
+Installed PHP version : 5.6.40
+End of life date       : 2018-12-31
+Source: HTTP Header (X-Powered-By: PHP/5.6.40)
+        </plugin_output>
+        <exploit_available>true</exploit_available>
+      </ReportItem>
+
+      <!-- ========== CRITICAL — MySQL 5.5.x End of Life ========== -->
+      <ReportItem port="3306" svc_name="mysql" protocol="tcp" severity="4" pluginID="103447" pluginName="MySQL 5.5.x End of Life Unsupported Version" pluginFamily="Databases">
+        <description>The remote MySQL server is running version 5.5.62, which reached end of life in December 2018. This version has over 60 known CVEs. The MySQL instance accepts connections from any internal IP address (bind-address: 0.0.0.0).</description>
+        <risk_factor>Critical</risk_factor>
+        <solution>Upgrade to MySQL 8.0.x or later. Restrict bind-address to localhost or application server IPs only.</solution>
+        <synopsis>An unsupported version of MySQL is running and listening on all interfaces.</synopsis>
+        <cvss3_base_score>9.8</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector>
+        <cvss_base_score>7.5</cvss_base_score>
+        <cve>CVE-2018-3133</cve>
+        <cve>CVE-2018-3174</cve>
+        <cve>CVE-2018-3282</cve>
+        <plugin_output>
+Installed MySQL version : 5.5.62-community
+End of life date         : 2018-12
+Bind address             : 0.0.0.0 (all interfaces)
+Authentication method    : mysql_native_password
+Remote root login        : Allowed
+        </plugin_output>
+        <exploit_available>true</exploit_available>
+      </ReportItem>
+
+      <!-- ========== HIGH — SSL Self-Signed Certificate ========== -->
+      <ReportItem port="443" svc_name="www" protocol="tcp" severity="3" pluginID="57582" pluginName="SSL Self-Signed Certificate" pluginFamily="General">
+        <description>The SSL certificate on the remote host is self-signed. This will cause certificate warnings in browsers and prevents proper validation of server identity, making the connection susceptible to man-in-the-middle attacks.</description>
+        <risk_factor>High</risk_factor>
+        <solution>Obtain a certificate from a recognized Certificate Authority (CA).</solution>
+        <synopsis>The SSL certificate chain for this service is not signed by a recognized CA.</synopsis>
+        <cvss3_base_score>6.5</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N</cvss3_vector>
+        <cvss_base_score>6.4</cvss_base_score>
+        <plugin_output>
+Subject   : CN=meridian-hr.corp.local
+Issuer    : CN=meridian-hr.corp.local (self-signed)
+Valid From: 2022-01-15
+Valid To  : 2024-11-15  ** EXPIRED **
+Key Size  : 1024-bit RSA (below minimum recommended 2048-bit)
+Signature : SHA-1 (deprecated)
+        </plugin_output>
+      </ReportItem>
+
+      <!-- ========== HIGH — SSL/TLS POODLE (SSLv3) ========== -->
+      <ReportItem port="443" svc_name="www" protocol="tcp" severity="3" pluginID="78479" pluginName="SSLv3 Padding Oracle On Downgraded Legacy Encryption Vulnerability (POODLE)" pluginFamily="General">
+        <description>The remote host supports SSLv3, which is affected by the POODLE vulnerability (CVE-2014-3566). A man-in-the-middle attacker can exploit this to decrypt data transmitted over the connection.</description>
+        <risk_factor>High</risk_factor>
+        <solution>Disable SSLv3 and enforce TLS 1.2 or later.</solution>
+        <synopsis>SSLv3 is enabled and vulnerable to POODLE.</synopsis>
+        <cvss3_base_score>7.5</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H</cvss3_vector>
+        <cvss_base_score>4.3</cvss_base_score>
+        <cve>CVE-2014-3566</cve>
+        <plugin_output>
+SSLv3 is enabled on port 443.
+Vulnerable cipher suites:
+  SSLv3 : DES-CBC3-SHA, RC4-SHA, RC4-MD5
+  TLS 1.0: AES128-SHA, AES256-SHA, DES-CBC3-SHA
+        </plugin_output>
+      </ReportItem>
+
+      <!-- ========== HIGH — FTP Cleartext Authentication ========== -->
+      <ReportItem port="21" svc_name="ftp" protocol="tcp" severity="3" pluginID="34324" pluginName="FTP Supports Cleartext Authentication" pluginFamily="General">
+        <description>The remote FTP server accepts credentials in cleartext. Any network observer can intercept usernames, passwords, and all transferred file contents. Nightly payroll files containing sensitive employee data are transferred via this service.</description>
+        <risk_factor>High</risk_factor>
+        <solution>Replace FTP with SFTP or SCP. If FTP must be used, enable FTPS (FTP over TLS).</solution>
+        <synopsis>The remote FTP server transmits credentials and data in cleartext.</synopsis>
+        <cvss3_base_score>7.5</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N</cvss3_vector>
+        <cvss_base_score>7.5</cvss_base_score>
+        <plugin_output>
+FTP server banner: 220 (vsFTPd 3.0.2)
+AUTH TLS supported: No
+Cleartext login observed: Yes
+Anonymous login: Disabled
+        </plugin_output>
+      </ReportItem>
+
+      <!-- ========== HIGH — SMBv1 Enabled ========== -->
+      <ReportItem port="445" svc_name="cifs" protocol="tcp" severity="3" pluginID="96982" pluginName="Server Message Block (SMB) Protocol Version 1 Enabled" pluginFamily="Windows">
+        <description>The remote Windows host has SMBv1 enabled. SMBv1 is a legacy protocol with numerous known vulnerabilities including EternalBlue (MS17-010). Microsoft recommends disabling SMBv1 on all systems.</description>
+        <risk_factor>High</risk_factor>
+        <solution>Disable SMBv1 on the remote host.</solution>
+        <synopsis>The remote host supports SMBv1.</synopsis>
+        <cvss3_base_score>7.5</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H</cvss3_vector>
+        <cvss_base_score>5.0</cvss_base_score>
+        <plugin_output>
+SMBv1 is enabled.
+Negotiated dialect: NT LM 0.12
+        </plugin_output>
+      </ReportItem>
+
+      <!-- ========== HIGH — Windows 2008 R2 End of Life ========== -->
+      <ReportItem port="0" svc_name="general" protocol="tcp" severity="3" pluginID="108797" pluginName="Microsoft Windows Server 2008 R2 Unsupported OS Detection" pluginFamily="Windows">
+        <description>The remote host is running Microsoft Windows Server 2008 R2 SP1, which reached end of extended support on January 14, 2020. The OS no longer receives security patches from Microsoft.</description>
+        <risk_factor>High</risk_factor>
+        <solution>Upgrade the operating system to Windows Server 2022 or later.</solution>
+        <synopsis>The remote operating system is no longer supported.</synopsis>
+        <cvss3_base_score>8.0</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:L</cvss3_vector>
+        <cvss_base_score>10.0</cvss_base_score>
+        <plugin_output>
+Operating System  : Microsoft Windows Server 2008 R2 Standard SP1
+Build             : 6.1.7601
+End of Support    : January 14, 2020
+Extended Security Updates (ESU): Not enrolled
+Days past end of life: 2,213 days
+        </plugin_output>
+      </ReportItem>
+
+      <!-- ========== HIGH — RDP NLA Not Enabled ========== -->
+      <ReportItem port="3389" svc_name="msrdp" protocol="tcp" severity="3" pluginID="58453" pluginName="Microsoft Windows Remote Desktop Protocol NLA Not Enabled" pluginFamily="Windows">
+        <description>The remote host has Remote Desktop enabled without Network Level Authentication (NLA). Without NLA, an attacker can reach the Windows login screen without any authentication, increasing exposure to brute-force and exploit attacks (including BlueKeep).</description>
+        <risk_factor>High</risk_factor>
+        <solution>Enable Network Level Authentication for Remote Desktop connections.</solution>
+        <synopsis>RDP is enabled without NLA on the remote host.</synopsis>
+        <cvss3_base_score>7.5</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H</cvss3_vector>
+        <cvss_base_score>4.3</cvss_base_score>
+        <plugin_output>
+Remote Desktop is enabled on port 3389.
+Network Level Authentication (NLA): Disabled
+Encryption Level: Client Compatible (Low)
+Security Layer: RDP Security Layer (not TLS)
+        </plugin_output>
+      </ReportItem>
+
+      <!-- ========== MEDIUM — Web Application SQL Injection ========== -->
+      <ReportItem port="80" svc_name="www" protocol="tcp" severity="2" pluginID="42479" pluginName="Web Application SQL Injection" pluginFamily="CGI abuses">
+        <description>The remote web application appears to be vulnerable to SQL injection. By manipulating input parameters, it may be possible to read or modify data in the backend database. Error messages reveal the MySQL version and query structure.</description>
+        <risk_factor>Medium</risk_factor>
+        <solution>Use parameterized queries or prepared statements. Implement input validation.</solution>
+        <synopsis>A web application on the remote host is vulnerable to SQL injection.</synopsis>
+        <cvss3_base_score>8.6</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H</cvss3_vector>
+        <cvss_base_score>7.5</cvss_base_score>
+        <cve>CVE-1999-0002</cve>
+        <plugin_output>
+URL       : http://10.0.50.10/search.php?employee_id=1
+Parameter : employee_id
+Method    : GET
+Payload   : 1' OR '1'='1
+Evidence  : MySQL error: "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1"
+
+URL       : http://10.0.50.10/reports.php?dept=HR
+Parameter : dept
+Method    : GET
+Payload   : HR' UNION SELECT username,password FROM users--
+Evidence  : Response contained additional table rows with hash values.
+        </plugin_output>
+      </ReportItem>
+
+      <!-- ========== MEDIUM — HTTP TRACE/TRACK Methods Enabled ========== -->
+      <ReportItem port="80" svc_name="www" protocol="tcp" severity="2" pluginID="11213" pluginName="HTTP TRACE / TRACK Methods Allowed" pluginFamily="Web Servers">
+        <description>The remote web server supports the TRACE and/or TRACK methods. These methods can be used in cross-site tracing attacks to steal credentials.</description>
+        <risk_factor>Medium</risk_factor>
+        <solution>Disable TRACE and TRACK methods in the Apache configuration.</solution>
+        <synopsis>Debugging methods are enabled on the remote web server.</synopsis>
+        <cvss3_base_score>5.3</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N</cvss3_vector>
+        <cvss_base_score>5.0</cvss_base_score>
+        <plugin_output>
+TRACE is enabled on port 80.
+TRACE is enabled on port 443.
+        </plugin_output>
+      </ReportItem>
+
+      <!-- ========== MEDIUM — Directory Listing Enabled ========== -->
+      <ReportItem port="80" svc_name="www" protocol="tcp" severity="2" pluginID="40984" pluginName="Apache HTTP Server Directory Listing" pluginFamily="Web Servers">
+        <description>The remote web server allows directory listing. This enables attackers to discover application structure, backup files, and sensitive configuration files.</description>
+        <risk_factor>Medium</risk_factor>
+        <solution>Disable directory listing by adding 'Options -Indexes' to the Apache configuration.</solution>
+        <synopsis>The remote web server allows directory browsing.</synopsis>
+        <cvss3_base_score>5.3</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N</cvss3_vector>
+        <cvss_base_score>5.0</cvss_base_score>
+        <plugin_output>
+The following directories allow listing:
+  http://10.0.50.10/
+  http://10.0.50.10/includes/
+  http://10.0.50.10/uploads/
+  http://10.0.50.10/backup/
+  http://10.0.50.10/logs/
+
+Sensitive files discovered:
+  http://10.0.50.10/backup/meridian_db_20251201.sql.gz
+  http://10.0.50.10/includes/config.php
+  http://10.0.50.10/logs/error.log
+        </plugin_output>
+      </ReportItem>
+
+      <!-- ========== LOW — ICMP Timestamp Response ========== -->
+      <ReportItem port="0" svc_name="general" protocol="icmp" severity="1" pluginID="10114" pluginName="ICMP Timestamp Request Remote Date Disclosure" pluginFamily="General">
+        <description>The remote host answers to ICMP timestamp requests, disclosing the system date and time.</description>
+        <risk_factor>Low</risk_factor>
+        <solution>Filter incoming ICMP timestamp requests at the firewall level.</solution>
+        <synopsis>The remote host responds to ICMP timestamp requests.</synopsis>
+        <cvss3_base_score>2.0</cvss3_base_score>
+        <cvss3_vector>CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N</cvss3_vector>
+        <cvss_base_score>0.0</cvss_base_score>
+        <plugin_output>
+Remote system time: Tue Feb 04 09:23:44 2026
+Local system time : Tue Feb 04 09:23:44 2026
+        </plugin_output>
+      </ReportItem>
+
+      <!-- ========== INFO — Host Scan Summary ========== -->
+      <ReportItem port="0" svc_name="general" protocol="tcp" severity="0" pluginID="19506" pluginName="Nessus Scan Information" pluginFamily="Settings">
+        <description>Information about the Nessus scan.</description>
+        <risk_factor>None</risk_factor>
+        <plugin_output>
+Nessus version      : 10.7.1
+Plugin feed version  : 202602030000
+Scanner edition      : Nessus Professional
+Scan type            : Normal
+Scan name            : Meridian HR Portal - Internal Scan
+Scan policy          : Advanced Network Scan
+Scanner IP           : 10.0.50.200
+Port scanner(s)      : nessus_syn_scanner
+Port range           : 1-65535
+Thorough tests       : yes
+Scan Start Date      : 2026/02/04 09:00 EST
+Scan duration        : 2537 sec
+Hosts scanned        : 1
+Targets              : 10.0.50.10
+        </plugin_output>
+      </ReportItem>
+
+      <!-- ========== INFO — Open Ports ========== -->
+      <ReportItem port="0" svc_name="general" protocol="tcp" severity="0" pluginID="25220" pluginName="TCP/IP Port Summary" pluginFamily="General">
+        <description>Summary of open TCP ports on the remote host.</description>
+        <risk_factor>None</risk_factor>
+        <plugin_output>
+Open TCP ports:
+  21  (ftp)
+  80  (http)
+  135 (msrpc)
+  139 (netbios-ssn)
+  443 (https)
+  445 (microsoft-ds)
+  3306 (mysql)
+  3389 (ms-wbt-server)
+  8080 (http-proxy — phpMyAdmin)
+  49152-49156 (dynamic RPC)
+        </plugin_output>
+      </ReportItem>
+
+    </ReportHost>
+  </Report>
+</NessusClientData_v2>

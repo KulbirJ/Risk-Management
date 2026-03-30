@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield, Upload, FileText, Download, X, Check, Loader2, RefreshCw, Sparkles, UserCheck, ChevronDown, ArrowRightCircle, Brain, Network, Boxes, Database } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield, Upload, FileText, Download, X, Check, Loader2, Sparkles, UserCheck, ChevronDown, ChevronRight, ArrowRightCircle, Brain, Network, Boxes, Database, MoreHorizontal, Wrench } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { LoadingPage } from '../../../components/LoadingSpinner';
 import { Alert } from '../../../components/Alert';
@@ -69,10 +69,37 @@ export default function AssessmentDetailPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
-  const [threatsExpanded, setThreatsExpanded] = useState(false);
+  const [threatsExpanded, setThreatsExpanded] = useState(true); // default expanded per UX plan
 
   // Analytics tab state
-  const [analyticsTab, setAnalyticsTab] = useState<'intel' | 'ml' | 'graph' | 'cluster' | 'compliance'>('intel');
+  const [analyticsTab, setAnalyticsTab] = useState<'evidence' | 'enrichment' | 'ml' | 'graph' | 'cluster' | 'compliance'>('evidence');
+
+  // Tools & Analysis section collapsed by default
+  const [toolsExpanded, setToolsExpanded] = useState(false);
+
+  // Overflow menu state
+  const [showOverflow, setShowOverflow] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+
+  // Threat view tab: analyst vs ai
+  const [threatViewTab, setThreatViewTab] = useState<'all' | 'analyst' | 'ai'>('all');
+
+  // Expanded threat card IDs (progressive disclosure)
+  const [expandedThreats, setExpandedThreats] = useState<Set<string>>(new Set());
+
+  // Metadata expanded
+  const [metadataExpanded, setMetadataExpanded] = useState(false);
+
+  // Close overflow menu on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setShowOverflow(false);
+      }
+    };
+    if (showOverflow) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showOverflow]);
 
   const ALLOWED_TYPES = [
     'application/pdf',
@@ -388,9 +415,34 @@ export default function AssessmentDetailPage() {
     );
   }
 
+  // Severity distribution helpers
+  const severityCounts = threats.reduce((acc, t) => {
+    const sev = (t.severity || 'Medium') as string;
+    acc[sev] = (acc[sev] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const analystThreats = threats.filter(t => t.detected_by !== 'ai_intelligence');
+  const aiThreats = threats.filter(t => t.detected_by === 'ai_intelligence');
+  const filteredThreats = threatViewTab === 'analyst' ? analystThreats : threatViewTab === 'ai' ? aiThreats : threats;
+
+  const toggleThreatExpand = (id: string) => {
+    setExpandedThreats(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // Tools summary line
+  const toolsSummary = [
+    evidenceList.length > 0 ? `${evidenceList.length} evidence file${evidenceList.length !== 1 ? 's' : ''}` : null,
+    threats.length > 0 ? 'ML scored' : null,
+  ].filter(Boolean).join(' · ') || 'No data yet';
+
   return (
     <div>
-      <Link href="/assessments" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-6">
+      <Link href="/assessments" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-4">
         <ArrowLeft className="w-4 h-4 mr-2" />
         Back to Assessments
       </Link>
@@ -399,40 +451,107 @@ export default function AssessmentDetailPage() {
         <Alert type="error" message={error} onClose={() => setError(null)} />
       )}
 
-      {/* Assessment Header */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-gray-900">{assessment.title}</h1>
+      {/* ═══════════════════════════════════════════════════════════
+          ZONE A — Context Bar (compact header)
+         ═══════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-lg border border-gray-200 p-5 mb-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-2xl font-bold text-gray-900 truncate">{assessment.title}</h1>
               <StatusBadge status={assessment.status} />
+              <SeverityBadge severity={assessment.overall_impact || 'Medium'} />
             </div>
-            <p className="text-gray-600">{assessment.description || 'No description'}</p>
+            {assessment.description && (
+              <p className="text-sm text-gray-600 line-clamp-1">{assessment.description}</p>
+            )}
           </div>
-          <div className="flex gap-2 items-center flex-wrap">
-            {/* One-click full pipeline button */}
+
+          {/* Action buttons: Primary + Overflow */}
+          <div className="flex items-center gap-2 shrink-0">
             <TriggerAssessmentButton
               assessmentId={assessmentId}
               onComplete={loadAssessmentData}
             />
-            <Link href={`/assessments/${assessmentId}/report`}>
-              <Button variant="ghost" size="sm">
-                <FileText className="w-4 h-4 mr-2" />
-                Report
-              </Button>
-            </Link>
-            <Button variant="ghost" size="sm" onClick={handleEditAssessment}>
-              <Edit className="w-4 h-4 mr-2" />
-              Edit
-            </Button>
-            <Button variant="danger" size="sm" onClick={handleDeleteAssessment}>
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
-            </Button>
+            <div className="relative" ref={overflowRef}>
+              <button
+                onClick={() => setShowOverflow(!showOverflow)}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                title="More actions"
+              >
+                <MoreHorizontal className="w-5 h-5" />
+              </button>
+              {showOverflow && (
+                <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                  <Link
+                    href={`/assessments/${assessmentId}/report`}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setShowOverflow(false)}
+                  >
+                    <FileText className="w-4 h-4" />
+                    View Report
+                  </Link>
+                  <button
+                    onClick={() => { setShowOverflow(false); handleEditAssessment(); }}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
+                  >
+                    <Edit className="w-4 h-4" />
+                    Edit Assessment
+                  </button>
+                  <hr className="my-1 border-gray-100" />
+                  <button
+                    onClick={() => { setShowOverflow(false); handleDeleteAssessment(); }}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {isEditingAssessment ? (
+        {/* Expandable metadata row */}
+        <button
+          onClick={() => setMetadataExpanded(!metadataExpanded)}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 mt-2 transition-colors"
+        >
+          <ChevronRight className={`w-3 h-3 transition-transform ${metadataExpanded ? 'rotate-90' : ''}`} />
+          {assessment.industry_sector
+            ? assessment.industry_sector.replace(/_/g, ' ')
+            : 'Details'}
+          {' · '}
+          {format(new Date(assessment.created_at), 'MMM d, yyyy')}
+        </button>
+
+        {metadataExpanded && !isEditingAssessment && (
+          <div className="grid grid-cols-4 gap-6 text-sm mt-3 pt-3 border-t border-gray-100">
+            <div>
+              <span className="text-gray-500">Overall Impact:</span>
+              <p className="font-medium capitalize mt-0.5">{assessment.overall_impact}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">Industry Sector:</span>
+              <p className="font-medium capitalize mt-0.5">
+                {assessment.industry_sector
+                  ? assessment.industry_sector.replace(/_/g, ' ')
+                  : <span className="text-gray-400 italic">Not set</span>}
+              </p>
+            </div>
+            <div>
+              <span className="text-gray-500">Created:</span>
+              <p className="font-medium mt-0.5">{format(new Date(assessment.created_at), 'MMM d, yyyy')}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">Last Updated:</span>
+              <p className="font-medium mt-0.5">{format(new Date(assessment.updated_at), 'MMM d, yyyy')}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Inline Edit Form (shown when editing) */}
+        {isEditingAssessment && (
           <div className="mt-4 space-y-4 border-t border-gray-200 pt-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
@@ -521,359 +640,310 @@ export default function AssessmentDetailPage() {
               </Button>
             </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-4 gap-6 text-sm">
-            <div>
-              <span className="text-gray-500">Overall Impact:</span>
-              <p className="font-medium capitalize mt-1">{assessment.overall_impact}</p>
+        )}
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════
+          ZONE B — Threats Overview (hero section)
+         ═══════════════════════════════════════════════════════════ */}
+      <div className="mb-4">
+        {/* Severity summary strip + Add Threat */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Threats ({threats.length})
+            </h2>
+            {threats.length > 0 && (
+              <div className="flex items-center gap-1.5 text-xs">
+                {(severityCounts['Critical'] || 0) > 0 && (
+                  <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full font-medium">
+                    {severityCounts['Critical']} Critical
+                  </span>
+                )}
+                {(severityCounts['High'] || 0) > 0 && (
+                  <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full font-medium">
+                    {severityCounts['High']} High
+                  </span>
+                )}
+                {(severityCounts['Medium'] || 0) > 0 && (
+                  <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full font-medium">
+                    {severityCounts['Medium']} Medium
+                  </span>
+                )}
+                {(severityCounts['Low'] || 0) > 0 && (
+                  <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                    {severityCounts['Low']} Low
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => setIsThreatModalOpen(true)}>
+              <Plus className="w-4 h-4 mr-1" />
+              Add Threat
+            </Button>
+            <button
+              onClick={() => setThreatsExpanded(!threatsExpanded)}
+              className="p-1.5 text-gray-400 hover:text-gray-600 rounded transition-colors"
+            >
+              <ChevronDown className={`w-5 h-5 transition-transform ${threatsExpanded ? 'rotate-0' : '-rotate-90'}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Analyst / AI filter tabs */}
+        {threatsExpanded && threats.length > 0 && (
+          <>
+            <div className="flex items-center gap-1 mb-3">
+              {[
+                { key: 'all' as const, label: 'All', count: threats.length },
+                { key: 'analyst' as const, label: 'Analyst', count: analystThreats.length, icon: UserCheck },
+                { key: 'ai' as const, label: 'AI', count: aiThreats.length, icon: Sparkles },
+              ].filter(t => t.count > 0).map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setThreatViewTab(tab.key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                    threatViewTab === tab.key
+                      ? 'bg-gray-900 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {tab.icon && <tab.icon className="w-3 h-3" />}
+                  {tab.label}
+                  <span className={`ml-0.5 ${threatViewTab === tab.key ? 'text-gray-300' : 'text-gray-400'}`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
             </div>
-            <div>
-              <span className="text-gray-500">Industry Sector:</span>
-              <p className="font-medium capitalize mt-1">
-                {assessment.industry_sector
-                  ? assessment.industry_sector.replace(/_/g, ' ')
-                  : <span className="text-gray-400 italic">Not set</span>}
-              </p>
+
+            {/* Threat cards */}
+            <div className="space-y-2">
+              {filteredThreats.map((threat) => (
+                <ThreatCard
+                  key={threat.id}
+                  threat={threat}
+                  onEdit={openEditThreatModal}
+                  onDelete={handleDeleteThreat}
+                  onPromote={threat.detected_by === 'ai_intelligence' ? handlePromoteThreat : undefined}
+                  showPromote={threat.detected_by === 'ai_intelligence'}
+                  recommendations={recommendations.filter(r => r.threat_id === threat.id)}
+                  isExpanded={expandedThreats.has(threat.id)}
+                  onToggleExpand={() => toggleThreatExpand(threat.id)}
+                />
+              ))}
             </div>
-            <div>
-              <span className="text-gray-500">Created:</span>
-              <p className="font-medium mt-1">
-                {format(new Date(assessment.created_at), 'MMM d, yyyy')}
-              </p>
-            </div>
-            <div>
-              <span className="text-gray-500">Last Updated:</span>
-              <p className="font-medium mt-1">
-                {format(new Date(assessment.updated_at), 'MMM d, yyyy')}
-              </p>
-            </div>
+          </>
+        )}
+
+        {threatsExpanded && threats.length === 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+            <AlertTriangle className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 mb-3 text-sm">No threats identified yet</p>
+            <Button size="sm" onClick={() => setIsThreatModalOpen(true)}>
+              <Plus className="w-4 h-4 mr-1" />
+              Add First Threat
+            </Button>
           </div>
         )}
       </div>
 
-      {/* AI Intelligence Panel */}
-      <IntelligencePanel
-        assessmentId={assessmentId}
-        onEnrichComplete={loadAssessmentData}
-      />
-
-      {/* Evidence & Documents Upload Section */}
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <FileText className="w-5 h-5 text-blue-500" />
-          Evidence & Documents ({evidenceList.length})
-        </h2>
-
-        {/* Drop Zone */}
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-          className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors mb-4 ${
-            dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-white'
-          }`}
+      {/* ═══════════════════════════════════════════════════════════
+          ZONE C — Tools & Analysis (collapsible)
+         ═══════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-lg border border-gray-200 mb-4">
+        {/* Collapse header */}
+        <button
+          onClick={() => setToolsExpanded(!toolsExpanded)}
+          className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors rounded-lg"
         >
-          <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-          <p className="text-sm text-gray-600 mb-2">
-            Drag & drop files here, or{' '}
-            <label className="text-blue-600 hover:underline cursor-pointer">
-              browse
-              <input
-                type="file"
-                multiple
-                className="hidden"
-                accept=".pdf,.docx,.xlsx,.xls,.csv,.json,.xml,.txt,.md,.log,.png,.jpg,.jpeg"
-                onChange={(e) => handleFileUpload(e.target.files)}
-                disabled={isUploading}
-              />
-            </label>
-          </p>
-          <p className="text-xs text-gray-400">
-            PDF, DOCX, XLSX, CSV, JSON, XML, TXT, images — max {MAX_SIZE_MB}MB per file
-          </p>
-          {isUploading && (
-            <div className="flex items-center justify-center gap-2 mt-3 text-blue-600">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm">Uploading & processing...</span>
-            </div>
-          )}
-          {uploadError && (
-            <p className="text-sm text-red-600 mt-2">{uploadError}</p>
-          )}
-        </div>
+          <div className="flex items-center gap-2">
+            <Wrench className="w-4 h-4 text-gray-400" />
+            <span className="text-sm font-medium text-gray-700">Tools & Analysis</span>
+            <span className="text-xs text-gray-400">{toolsSummary}</span>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${toolsExpanded ? 'rotate-0' : '-rotate-90'}`} />
+        </button>
 
-        {/* Evidence List */}
-        {evidenceList.length > 0 && (
-          <div className="space-y-2">
-            {evidenceList.map((ev) => (
-              <div
-                key={ev.id}
-                className="bg-white rounded-lg border border-gray-200 p-4 flex items-center justify-between hover:shadow-sm hover:border-blue-300 transition-all cursor-pointer"
-                onClick={() => setSelectedEvidence(ev)}
-              >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  {getStatusIcon(ev.status)}
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{ev.file_name}</p>
-                    <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
-                      <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded font-medium">
-                        {getDocTypeLabel(ev.document_type)}
-                      </span>
-                      <span>{formatFileSize(ev.size_bytes)}</span>
-                      <span>{format(new Date(ev.created_at), 'MMM d, yyyy')}</span>
-                      {ev.status === 'ready' && ev.analysis_summary && (
-                        <span className="text-green-700 truncate max-w-[300px]" title={ev.analysis_summary}>
-                          {ev.analysis_summary.slice(0, 80)}{ev.analysis_summary.length > 80 ? '…' : ''}
-                        </span>
-                      )}
-                      {ev.status === 'ready' && !ev.analysis_summary && ev.extracted_text && (
-                        <span className="text-gray-500">
-                          {ev.extracted_text.length.toLocaleString()} chars — analysis pending
-                        </span>
-                      )}
-                      {ev.status === 'failed' && (
-                        <span className="text-red-600">Processing failed</span>
-                      )}
-                      {ev.status === 'processing' && (
-                        <span className="text-blue-600">Processing...</span>
-                      )}
+        {toolsExpanded && (
+          <>
+            {/* Tab navigation */}
+            <div className="border-t border-b border-gray-200 px-4">
+              <nav className="flex -mb-px gap-1">
+                {[
+                  { key: 'evidence' as const, label: 'Evidence', icon: FileText, count: evidenceList.length },
+                  { key: 'enrichment' as const, label: 'Enrichment', icon: Database },
+                  { key: 'ml' as const, label: 'ML Scoring', icon: Brain },
+                  { key: 'graph' as const, label: 'Threat Graph', icon: Network },
+                  { key: 'cluster' as const, label: 'Clusters', icon: Boxes },
+                  { key: 'compliance' as const, label: 'Compliance', icon: Shield },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setAnalyticsTab(tab.key)}
+                    className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+                      analyticsTab === tab.key
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <tab.icon className="w-3.5 h-3.5" />
+                    {tab.label}
+                    {'count' in tab && tab.count !== undefined && tab.count > 0 && (
+                      <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 rounded-full">{tab.count}</span>
+                    )}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            {/* Tab content */}
+            <div className="p-4">
+              {/* Evidence Tab */}
+              {analyticsTab === 'evidence' && (
+                <div>
+                  {/* Compact Drop Zone */}
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={handleDrop}
+                    className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors mb-3 ${
+                      dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-3">
+                      <Upload className="w-5 h-5 text-gray-400" />
+                      <p className="text-sm text-gray-500">
+                        Drop files here or{' '}
+                        <label className="text-blue-600 hover:underline cursor-pointer">
+                          browse
+                          <input
+                            type="file"
+                            multiple
+                            className="hidden"
+                            accept=".pdf,.docx,.xlsx,.xls,.csv,.json,.xml,.txt,.md,.log,.png,.jpg,.jpeg"
+                            onChange={(e) => handleFileUpload(e.target.files)}
+                            disabled={isUploading}
+                          />
+                        </label>
+                        <span className="text-xs text-gray-400 ml-2">Max {MAX_SIZE_MB}MB</span>
+                      </p>
                     </div>
-                    {/* Mini risk indicator badges */}
-                    {ev.risk_indicators && (
-                      <div className="flex items-center gap-1.5 mt-1">
-                        {(ev.risk_indicators.critical_vulns ?? 0) > 0 && (
-                          <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">
-                            {ev.risk_indicators.critical_vulns} critical
-                          </span>
-                        )}
-                        {(ev.risk_indicators.high_vulns ?? 0) > 0 && (
-                          <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">
-                            {ev.risk_indicators.high_vulns} high
-                          </span>
-                        )}
-                        {(ev.risk_indicators.missing_controls?.length ?? 0) > 0 && (
-                          <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium">
-                            {ev.risk_indicators.missing_controls!.length} missing controls
-                          </span>
-                        )}
-                        {(ev.risk_indicators.secrets_found ?? 0) > 0 && (
-                          <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">
-                            {ev.risk_indicators.secrets_found} secrets
-                          </span>
-                        )}
+                    {isUploading && (
+                      <div className="flex items-center justify-center gap-2 mt-2 text-blue-600">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Uploading...</span>
                       </div>
                     )}
+                    {uploadError && <p className="text-sm text-red-600 mt-2">{uploadError}</p>}
                   </div>
+
+                  {/* Compact Evidence List */}
+                  {evidenceList.length > 0 && (
+                    <div className="space-y-1">
+                      {evidenceList.map((ev) => (
+                        <div
+                          key={ev.id}
+                          className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer group transition-colors"
+                          onClick={() => setSelectedEvidence(ev)}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            {getStatusIcon(ev.status)}
+                            <span className="text-sm text-gray-900 truncate">{ev.file_name}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded font-medium shrink-0">
+                              {getDocTypeLabel(ev.document_type)}
+                            </span>
+                            <span className="text-xs text-gray-400 shrink-0">{formatFileSize(ev.size_bytes)}</span>
+                            {ev.risk_indicators && (
+                              <>
+                                {(ev.risk_indicators.critical_vulns ?? 0) > 0 && (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-600 rounded font-medium shrink-0">
+                                    {ev.risk_indicators.critical_vulns} crit
+                                  </span>
+                                )}
+                                {(ev.risk_indicators.high_vulns ?? 0) > 0 && (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded font-medium shrink-0">
+                                    {ev.risk_indicators.high_vulns} high
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                            {ev.status === 'ready' && !ev.analysis_summary && (
+                              <button
+                                onClick={async () => { try { await apiClient.analyzeEvidence(ev.id); await loadAssessmentData(); } catch {} }}
+                                className="p-1 text-gray-400 hover:text-purple-600 rounded"
+                                title="Analyze"
+                              >
+                                <Sparkles className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {ev.status === 'ready' && (
+                              <button onClick={() => handleDownloadEvidence(ev.id)} className="p-1 text-gray-400 hover:text-blue-600 rounded" title="Download">
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button onClick={() => handleDeleteEvidence(ev.id)} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Delete">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {evidenceList.length === 0 && (
+                    <p className="text-sm text-gray-400 text-center py-2">
+                      Upload vulnerability scans, architecture docs, or other evidence.
+                    </p>
+                  )}
                 </div>
-                <div className="flex items-center gap-1 ml-2" onClick={(e) => e.stopPropagation()}>
-                  {ev.status === 'ready' && !ev.analysis_summary && (
-                    <button
-                      onClick={async () => {
-                        try {
-                          await apiClient.analyzeEvidence(ev.id);
-                          await loadAssessmentData();
-                        } catch {}
-                      }}
-                      className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
-                      title="Analyze with AI"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                    </button>
-                  )}
-                  {(ev.status === 'processing' || ev.status === 'failed') && (
-                    <button
-                      onClick={() => handleRetryEvidence(ev.id)}
-                      className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
-                      title="Retry processing"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
-                  )}
-                  {ev.status === 'ready' && (
-                    <button
-                      onClick={() => handleDownloadEvidence(ev.id)}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                      title="Download"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDeleteEvidence(ev.id)}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+              )}
+
+              {/* Enrichment Tab (merged IntelligencePanel + IntelEnrichmentPanel) */}
+              {analyticsTab === 'enrichment' && (
+                <div className="space-y-4">
+                  <IntelligencePanel
+                    assessmentId={assessmentId}
+                    onEnrichComplete={loadAssessmentData}
+                  />
+                  <IntelEnrichmentPanel assessmentId={assessmentId} threatIds={threats.map(t => t.id)} onEnrichComplete={loadAssessmentData} />
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              )}
 
-        {evidenceList.length === 0 && (
-          <p className="text-sm text-gray-500 text-center py-2">
-            Upload vulnerability scans, architecture docs, or other evidence to improve AI threat analysis.
-          </p>
-        )}
-
-        {/* Evidence Detail Modal */}
-        {selectedEvidence && (
-          <EvidenceDetailModal
-            isOpen={!!selectedEvidence}
-            onClose={() => setSelectedEvidence(null)}
-            evidence={selectedEvidence}
-            onDelete={(id) => {
-              setSelectedEvidence(null);
-              handleDeleteEvidence(id);
-            }}
-            onRetry={(id) => {
-              setSelectedEvidence(null);
-              handleRetryEvidence(id);
-            }}
-            onDownload={(id) => handleDownloadEvidence(id)}
-            onAnalyzed={() => loadAssessmentData()}
-          />
-        )}
-      </div>
-
-      {/* Advanced Analytics Section */}
-      <div className="bg-white rounded-lg border border-gray-200 mb-6">
-        <div className="border-b border-gray-200 px-4">
-          <nav className="flex -mb-px gap-1">
-            {[
-              { key: 'intel' as const, label: 'Intel Enrichment', icon: Database },
-              { key: 'ml' as const, label: 'ML Scoring', icon: Brain },
-              { key: 'graph' as const, label: 'Threat Graph', icon: Network },
-              { key: 'cluster' as const, label: 'Clustering', icon: Boxes },
-              { key: 'compliance' as const, label: 'Compliance', icon: Shield },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setAnalyticsTab(tab.key)}
-                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  analyticsTab === tab.key
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-        <div className="p-4">
-          {analyticsTab === 'intel' && (
-            <IntelEnrichmentPanel assessmentId={assessmentId} threatIds={threats.map(t => t.id)} onEnrichComplete={loadAssessmentData} />
-          )}
-          {analyticsTab === 'ml' && (
-            <MLScoringPanel assessmentId={assessmentId} onScoreComplete={loadAssessmentData} />
-          )}
-          {analyticsTab === 'graph' && (
-            <ThreatGraphPanel assessmentId={assessmentId} />
-          )}
-          {analyticsTab === 'cluster' && (
-            <ClusteringPanel assessmentId={assessmentId} />
-          )}
-          {analyticsTab === 'compliance' && (
-            <CompliancePanel assessmentId={assessmentId} threatIds={threats.map(t => t.id)} />
-          )}
-        </div>
-      </div>
-
-      {/* Threats List */}
-      <div className="mb-6">
-        <button
-          onClick={() => setThreatsExpanded(!threatsExpanded)}
-          className="w-full flex items-center justify-between py-3 px-1 group"
-        >
-          <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-amber-500" />
-            Identified Threats ({threats.length})
-          </h2>
-          <div className="flex items-center gap-2">
-            <div onClick={(e) => e.stopPropagation()}>
-              <Button size="sm" onClick={() => { setIsThreatModalOpen(true); }}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Threat
-              </Button>
+              {analyticsTab === 'ml' && (
+                <MLScoringPanel assessmentId={assessmentId} onScoreComplete={loadAssessmentData} />
+              )}
+              {analyticsTab === 'graph' && (
+                <ThreatGraphPanel assessmentId={assessmentId} />
+              )}
+              {analyticsTab === 'cluster' && (
+                <ClusteringPanel assessmentId={assessmentId} />
+              )}
+              {analyticsTab === 'compliance' && (
+                <CompliancePanel assessmentId={assessmentId} threatIds={threats.map(t => t.id)} />
+              )}
             </div>
-            <ChevronDown className={`w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-transform duration-200 ${threatsExpanded ? 'rotate-0' : '-rotate-90'}`} />
-          </div>
-        </button>
+          </>
+        )}
       </div>
 
-      {threatsExpanded && (threats.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-          <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-600 mb-4">No threats identified yet</p>
-          <Button size="sm" onClick={() => setIsThreatModalOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add First Threat
-          </Button>
-        </div>
-      ) : (
-        <>
-          {/* Analyst Assessed Section */}
-          {(() => {
-            const analystThreats = threats.filter(t => t.detected_by !== 'ai_intelligence');
-            if (analystThreats.length === 0) return null;
-            return (
-              <div className="mb-8">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="p-1.5 bg-emerald-100 rounded-md">
-                    <Check className="w-4 h-4 text-emerald-600" />
-                  </div>
-                  <h3 className="text-base font-semibold text-gray-800">
-                    Analyst Assessed
-                  </h3>
-                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">{analystThreats.length}</span>
-                  <span className="text-xs text-gray-500 ml-1">Protected from AI re-runs</span>
-                </div>
-                <div className="space-y-4">
-                  {analystThreats.map((threat) => (
-                    <ThreatCard key={threat.id} threat={threat} onEdit={openEditThreatModal} onDelete={handleDeleteThreat} recommendations={recommendations.filter(r => r.threat_id === threat.id)} />
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* AI Assessed Section */}
-          {(() => {
-            const aiThreats = threats.filter(t => t.detected_by === 'ai_intelligence');
-            if (aiThreats.length === 0) return null;
-            return (
-              <div className="mb-8">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="p-1.5 bg-indigo-100 rounded-md">
-                    <Sparkles className="w-4 h-4 text-indigo-600" />
-                  </div>
-                  <h3 className="text-base font-semibold text-gray-800">
-                    AI Assessed
-                  </h3>
-                  <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">{aiThreats.length}</span>
-                  <span className="text-xs text-gray-500 ml-1">Will be refreshed on next AI enrichment</span>
-                </div>
-                <div className="space-y-4">
-                  {aiThreats.map((threat) => (
-                    <ThreatCard
-                      key={threat.id}
-                      threat={threat}
-                      onEdit={openEditThreatModal}
-                      onDelete={handleDeleteThreat}
-                      onPromote={handlePromoteThreat}
-                      showPromote
-                      recommendations={recommendations.filter(r => r.threat_id === threat.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-        </>
-      ))}
+      {/* Evidence Detail Modal */}
+      {selectedEvidence && (
+        <EvidenceDetailModal
+          isOpen={!!selectedEvidence}
+          onClose={() => setSelectedEvidence(null)}
+          evidence={selectedEvidence}
+          onDelete={(id) => { setSelectedEvidence(null); handleDeleteEvidence(id); }}
+          onRetry={(id) => { setSelectedEvidence(null); handleRetryEvidence(id); }}
+          onDownload={(id) => handleDownloadEvidence(id)}
+          onAnalyzed={() => loadAssessmentData()}
+        />
+      )}
 
       <ThreatModal
         isOpen={isThreatModalOpen}
@@ -909,6 +979,8 @@ function ThreatCard({
   onPromote,
   showPromote = false,
   recommendations = [],
+  isExpanded = false,
+  onToggleExpand,
 }: {
   threat: Threat;
   onEdit: (threat: Threat) => void;
@@ -916,124 +988,124 @@ function ThreatCard({
   onPromote?: (id: string, e: React.MouseEvent) => void;
   showPromote?: boolean;
   recommendations?: Recommendation[];
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }) {
   return (
-    <div
-      className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-lg transition-all cursor-pointer relative group"
-      onClick={() => onEdit(threat)}
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-base font-semibold text-gray-900 leading-tight">
-              {threat.title}
-            </h3>
-            {threat.detected_by === 'ai_intelligence' && <AiBadge />}
-            {threat.detected_by === 'analyst_assessed' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 border border-emerald-200">
-                <UserCheck className="w-3 h-3" />
-                Analyst Reviewed
-              </span>
-            )}
-            <EnrichmentBadge threatId={threat.id} />
-            <MLScoreBadge threatId={threat.id} />
-            <SeverityBadge severity={threat.severity} />
-          </div>
+    <div className={`bg-white rounded-lg border transition-all ${isExpanded ? 'border-gray-300 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}>
+      {/* Collapsed row — always visible */}
+      <div
+        className="flex items-center gap-3 p-3 cursor-pointer"
+        onClick={onToggleExpand}
+      >
+        <ChevronRight className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+        <SeverityBadge severity={threat.severity} />
+        <h3 className="text-sm font-medium text-gray-900 truncate flex-1">{threat.title}</h3>
+        {threat.detected_by === 'ai_intelligence' && <AiBadge />}
+        <EnrichmentBadge threatId={threat.id} />
+        <MLScoreBadge threatId={threat.id} />
+        <div className="flex items-center gap-3 text-xs text-gray-400 shrink-0">
+          <span>L: {threat.likelihood}</span>
+          <span>I: {threat.impact}</span>
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => onEdit(threat)}
+            className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors"
+            title="Edit"
+          >
+            <Edit className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => onDelete(threat.id)}
+            className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+            title="Delete"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded details */}
+      {isExpanded && (
+        <div className="px-4 pb-4 pt-0 border-t border-gray-100 space-y-3">
+          {/* Description */}
           {threat.description && (
-            <p className="text-sm text-gray-600 mt-1.5 line-clamp-2">{threat.description}</p>
+            <p className="text-sm text-gray-600 mt-3">{threat.description}</p>
           )}
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={(e) => { e.stopPropagation(); onEdit(threat); }}
-            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            title="Edit threat"
-          >
-            <Edit className="w-4 h-4" />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(threat.id); }}
-            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            title="Delete threat"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
 
-      {/* Metadata row */}
-      <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
-        <span className="capitalize">Status: <strong className="text-gray-700">{threat.status.replace('_', ' ')}</strong></span>
-        <span>Likelihood: <strong className="text-gray-700">{threat.likelihood}</strong></span>
-        <span>Impact: <strong className="text-gray-700">{threat.impact}</strong></span>
-        {threat.cve_ids?.length > 0 && <span>CVEs: <strong className="text-gray-700">{threat.cve_ids.length}</strong></span>}
-      </div>
-
-      {/* AI Rationale */}
-      {threat.ai_rationale && (
-        <div className="mt-3 p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-lg">
-          <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">AI Rationale</span>
-          <p className="text-sm text-indigo-900 mt-0.5">{threat.ai_rationale}</p>
-        </div>
-      )}
-
-      {/* Inline Recommendation (from threat field) */}
-      {threat.recommendation && (
-        <div className="mt-3 p-2.5 bg-amber-50/70 border border-amber-100 rounded-lg">
-          <div className="flex items-center gap-1.5">
-            <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
-            <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Recommendation</span>
+          {/* Metadata row */}
+          <div className="flex items-center gap-4 text-xs text-gray-500">
+            <span className="capitalize">Status: <strong className="text-gray-700">{threat.status.replace('_', ' ')}</strong></span>
+            <span>Likelihood: <strong className="text-gray-700">{threat.likelihood}</strong></span>
+            <span>Impact: <strong className="text-gray-700">{threat.impact}</strong></span>
+            {threat.cve_ids?.length > 0 && <span>CVEs: <strong className="text-gray-700">{threat.cve_ids.length}</strong></span>}
           </div>
-          <p className="text-sm text-amber-900 mt-0.5">{threat.recommendation}</p>
-        </div>
-      )}
 
-      {/* Linked Recommendations from separate records */}
-      {recommendations.length > 0 && (
-        <div className="mt-3 space-y-2">
-          {recommendations.map((rec) => (
-            <div key={rec.id} className="p-2.5 bg-green-50/70 border border-green-100 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Lightbulb className="w-3.5 h-3.5 text-green-600" />
-                  <span className="text-xs font-semibold text-green-700">{rec.title || 'Recommendation'}</span>
-                  {rec.ai_generated && <AiBadge />}
-                  <PriorityBadge priority={rec.priority} />
-                </div>
-                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                  rec.status === 'implemented' ? 'bg-green-100 text-green-700' :
-                  rec.status === 'approved' ? 'bg-blue-100 text-blue-700' :
-                  'bg-gray-100 text-gray-600'
-                }`}>{rec.status}</span>
-              </div>
-              <p className="text-sm text-green-900 mt-1">{rec.description || rec.text || ''}</p>
-              {(rec.estimated_effort || rec.cost_estimate) && (
-                <div className="flex gap-3 mt-1 text-xs text-green-600">
-                  {rec.estimated_effort && <span>Effort: {rec.estimated_effort}</span>}
-                  {rec.cost_estimate && <span>Cost: {rec.cost_estimate}</span>}
-                </div>
-              )}
+          {/* AI Rationale */}
+          {threat.ai_rationale && (
+            <div className="p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-lg">
+              <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">AI Rationale</span>
+              <p className="text-sm text-indigo-900 mt-0.5">{threat.ai_rationale}</p>
             </div>
-          ))}
+          )}
+
+          {/* Inline Recommendation */}
+          {threat.recommendation && (
+            <div className="p-2.5 bg-amber-50/70 border border-amber-100 rounded-lg">
+              <div className="flex items-center gap-1.5">
+                <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
+                <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Recommendation</span>
+              </div>
+              <p className="text-sm text-amber-900 mt-0.5">{threat.recommendation}</p>
+            </div>
+          )}
+
+          {/* Linked Recommendations */}
+          {recommendations.length > 0 && (
+            <div className="space-y-2">
+              {recommendations.map((rec) => (
+                <div key={rec.id} className="p-2.5 bg-green-50/70 border border-green-100 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Lightbulb className="w-3.5 h-3.5 text-green-600" />
+                      <span className="text-xs font-semibold text-green-700">{rec.title || 'Recommendation'}</span>
+                      {rec.ai_generated && <AiBadge />}
+                      <PriorityBadge priority={rec.priority} />
+                    </div>
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                      rec.status === 'implemented' ? 'bg-green-100 text-green-700' :
+                      rec.status === 'approved' ? 'bg-blue-100 text-blue-700' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>{rec.status}</span>
+                  </div>
+                  <p className="text-sm text-green-900 mt-1">{rec.description || rec.text || ''}</p>
+                  {(rec.estimated_effort || rec.cost_estimate) && (
+                    <div className="flex gap-3 mt-1 text-xs text-green-600">
+                      {rec.estimated_effort && <span>Effort: {rec.estimated_effort}</span>}
+                      {rec.cost_estimate && <span>Cost: {rec.cost_estimate}</span>}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Send to Analyst */}
+          {showPromote && onPromote && (
+            <button
+              onClick={(e) => onPromote(threat.id, e)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-emerald-500 hover:from-indigo-600 hover:to-emerald-600 rounded-lg shadow-sm hover:shadow-md transition-all"
+            >
+              <ArrowRightCircle className="w-4 h-4" />
+              Send to Analyst
+            </button>
+          )}
+
+          {/* ATT&CK Context */}
+          <AttackContextPanel threatId={threat.id} threatTitle={threat.title} />
         </div>
       )}
-
-      {/* Send to Analyst button */}
-      {showPromote && onPromote && (
-        <div className="mt-4 pt-3 border-t border-gray-100">
-          <button
-            onClick={(e) => onPromote(threat.id, e)}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-emerald-500 hover:from-indigo-600 hover:to-emerald-600 rounded-lg shadow-sm hover:shadow-md transition-all"
-          >
-            <ArrowRightCircle className="w-4 h-4" />
-            Send to Analyst
-          </button>
-        </div>
-      )}
-
-      {/* ATT&CK Context */}
-      <AttackContextPanel threatId={threat.id} threatTitle={threat.title} />
     </div>
   );
 }
