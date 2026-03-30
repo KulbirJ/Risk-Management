@@ -421,7 +421,12 @@ class IntelligenceService:
             Recommendation.ai_generated == True,
         ).delete(synchronize_session="fetch")
 
-        # 6. Now safe to delete the threats themselves
+        # 6. Detach evidence from AI threats (nullify FK, don't delete files)
+        db.query(Evidence).filter(
+            Evidence.threat_id.in_(ai_threat_ids)
+        ).update({Evidence.threat_id: None}, synchronize_session="fetch")
+
+        # 7. Now safe to delete the threats themselves
         threat_count = db.query(Threat).filter(
             Threat.assessment_id == assessment_id,
             Threat.tenant_id == tenant_id,
