@@ -29,17 +29,19 @@ export function Badge({ children, variant = 'default', size = 'md' }: BadgeProps
 
 export function SeverityBadge({ severity }: { severity: string }) {
   const colorMap: Record<string, string> = {
-    Critical: 'bg-red-600 text-white',
-    High:     'bg-amber-500 text-white',
-    Medium:   'bg-orange-400 text-white',
-    Low:      'bg-blue-500 text-white',
+    critical: 'bg-red-600 text-white',
+    high:     'bg-amber-500 text-white',
+    medium:   'bg-orange-400 text-white',
+    low:      'bg-blue-500 text-white',
   };
 
-  const classes = colorMap[severity] ?? 'bg-gray-200 text-gray-800';
+  const key = severity?.toLowerCase() ?? '';
+  const classes = colorMap[key] ?? 'bg-gray-200 text-gray-800';
+  const label = severity ? severity.charAt(0).toUpperCase() + severity.slice(1).toLowerCase() : 'Unknown';
 
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-sm font-semibold ${classes}`}>
-      {severity}
+      {label}
     </span>
   );
 }
