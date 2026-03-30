@@ -424,7 +424,10 @@ export default function AssessmentDetailPage() {
 
   const analystThreats = threats.filter(t => t.detected_by !== 'ai_intelligence');
   const aiThreats = threats.filter(t => t.detected_by === 'ai_intelligence');
-  const filteredThreats = threatViewTab === 'analyst' ? analystThreats : threatViewTab === 'ai' ? aiThreats : threats;
+  const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  const sortBySeverity = (list: Threat[]) =>
+    [...list].sort((a, b) => (severityOrder[a.severity?.toLowerCase()] ?? 4) - (severityOrder[b.severity?.toLowerCase()] ?? 4));
+  const filteredThreats = sortBySeverity(threatViewTab === 'analyst' ? analystThreats : threatViewTab === 'ai' ? aiThreats : threats);
 
   const toggleThreatExpand = (id: string) => {
     setExpandedThreats(prev => {
