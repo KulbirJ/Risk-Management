@@ -125,7 +125,34 @@ class EnrichmentOrchestrator:
         cve_ids = list(threat.cve_ids or [])  # type: ignore[arg-type]
         has_cves = len(cve_ids) > 0
 
-        if has_cves:
+        ml_service_handled_cve = False  # True when external ML service provided CVE features
+
+        if has_cves and settings.ml_service_url:
+            # ── Delegate CVE enrichment + scoring to the external ML microservice ──
+            try:
+                from ..ml_service_client import MLServiceClient
+                ml_client = MLServiceClient()
+                ml_result = await ml_client.enrich_and_score_single(
+                    threat_id=str(threat.id),
+                    cve_ids=cve_ids[:5],
+                )
+                if ml_result and ml_result.get("features"):
+                    mapped = MLServiceClient.map_ml_features_to_platform(ml_result["features"])
+                    unified_features.update(mapped)
+                    # Store the ML-predicted risk score for later use
+                    if "risk_score" in ml_result:
+                        unified_features["ml_predicted_risk_score"] = ml_result["risk_score"]
+                    if "severity_label" in ml_result:
+                        unified_features["ml_severity_label"] = ml_result["severity_label"]
+                    ml_service_handled_cve = True
+                    logger.info("ML service enriched threat %s with %d features", threat.id, len(mapped))
+            except Exception as ml_exc:
+                logger.warning("ML service unavailable for threat %s: %s", threat.id, ml_exc)
+                if not settings.ml_service_fallback:
+                    raise  # Fail hard if fallback is disabled
+
+        if has_cves and not ml_service_handled_cve:
+            # ── Fallback: built-in Track A enrichment (NVD → KEV → OTX → GitHub → EPSS) ──
             for cve_id in cve_ids[:5]:  # Cap at 5 CVEs per threat
                 # NVD
                 nvd_result = await self._fetch_and_store(

@@ -113,6 +113,11 @@ class Settings(BaseSettings):
     ml_model_s3_bucket: Optional[str] = None   # defaults to s3_bucket_evidence
     ml_model_s3_prefix: str = "ml-models/likelihood"  # candidate/ and latest/ sub-prefixes
 
+    # ─── External ML Microservice (CVE enrichment + scoring) ───
+    ml_service_url: str = ""          # e.g. "https://xxx.execute-api.ca-central-1.amazonaws.com/prod"  empty = disabled
+    ml_service_timeout: int = 30      # seconds per request to ML microservice
+    ml_service_fallback: bool = True  # fall back to built-in intel services when ML service is unavailable
+
     class Config:
         env_file = ".env"
         case_sensitive = False

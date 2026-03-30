@@ -309,8 +309,15 @@ class MLScoringService:
         assessment_id: Optional[UUID] = None,
         *,
         persist: bool = True,
+        skip_ml_scored: bool = False,
     ) -> Dict[str, Any]:
-        """Score multiple threats, respecting ``score_locked``."""
+        """Score multiple threats, respecting ``score_locked``.
+        
+        When *skip_ml_scored* is True, threats whose likelihood_score_rationale
+        already contains ``ml_predicted_risk_score`` (set by the external ML
+        microservice during enrichment) are skipped — their score is already
+        authoritative.
+        """
         query = db.query(Threat).filter(Threat.tenant_id == tenant_id)
         if threat_ids:
             query = query.filter(Threat.id.in_(threat_ids))
@@ -324,11 +331,22 @@ class MLScoringService:
         scored = 0
         skipped_locked = 0
         skipped_no_features = 0
+        skipped_ml_service = 0
 
         for threat in threats:
             features: dict = dict(threat.likelihood_score_rationale or {})  # type: ignore[arg-type]
             if not features:
                 skipped_no_features += 1
+                continue
+
+            # Skip threats already scored by the external ML microservice
+            if skip_ml_scored and features.get("ml_predicted_risk_score") is not None:
+                skipped_ml_service += 1
+                results.append({
+                    "threat_id": str(threat.id),
+                    "skipped": True,
+                    "reason": "ml_service_scored",
+                })
                 continue
 
             # Check if ActiveRisk is score_locked
@@ -362,6 +380,7 @@ class MLScoringService:
             "scored": scored,
             "skipped_locked": skipped_locked,
             "skipped_no_features": skipped_no_features,
+            "skipped_ml_service": skipped_ml_service,
             "total": len(threats),
             "results": results,
         }

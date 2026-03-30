@@ -137,6 +137,7 @@ def run_full_assessment_pipeline(
     # ── Step 2: Intel Threat Enrichment ───────────────────────────
     _set_step(results, "intel_threats", "running", "Fetching CVE / ATT&CK group data…")
     _commit_results(db, job, results)
+    ml_service_used = False
     try:
         from .intel.enrichment_orchestrator import EnrichmentOrchestrator
         orchestrator = EnrichmentOrchestrator()
@@ -149,23 +150,31 @@ def run_full_assessment_pipeline(
                 force_refresh=False,
             )
         )
-        n_enriched = intel_result.get("enriched_count", 0)
+        n_enriched = intel_result.get("threats_enriched", 0)
+        # Detect whether the external ML microservice handled CVE enrichment
+        from ..core.config import settings as _cfg
+        ml_service_used = bool(_cfg.ml_service_url)
+        source_label = "ML service + ATT&CK" if ml_service_used else "CVE / ATT&CK"
         _set_step(results, "intel_threats", "completed",
-                  f"{n_enriched} threat{'s' if n_enriched != 1 else ''} enriched with CVE / ATT&CK data", 33)
-        _logger.info("[FULL_RUN] Step intel_threats done: %s enriched", n_enriched)
+                  f"{n_enriched} threat{'s' if n_enriched != 1 else ''} enriched with {source_label} data", 33)
+        _logger.info("[FULL_RUN] Step intel_threats done: %s enriched (ml_service=%s)", n_enriched, ml_service_used)
     except Exception as exc:
         _set_step(results, "intel_threats", "failed", str(exc)[:200], 33)
         _logger.warning("[FULL_RUN] intel_threats failed (continuing): %s", exc)
     _commit_results(db, job, results)
 
     # ── Step 3: ML Scoring ────────────────────────────────────────
-    _set_step(results, "ml_scoring", "running", "Running ML likelihood model…")
+    if ml_service_used:
+        _set_step(results, "ml_scoring", "running", "Applying ML microservice scores + local scoring for non-CVE threats…")
+    else:
+        _set_step(results, "ml_scoring", "running", "Running ML likelihood model…")
     _commit_results(db, job, results)
     try:
         from .ml.scoring_service import MLScoringService
         scorer = MLScoringService()
         ml_result = scorer.score_batch(
-            db, tid, assessment_id=aid, persist=True
+            db, tid, assessment_id=aid, persist=True,
+            skip_ml_scored=ml_service_used,  # Skip threats already scored by ML microservice
         )
         n_scored = ml_result.get("scored", 0)
         _set_step(results, "ml_scoring", "completed",
