@@ -240,16 +240,16 @@ export default function DashboardPage() {
                       <div className="mt-2.5">
                         <div className="flex h-1.5 rounded-full overflow-hidden">
                           {(sevCounts['Critical'] || 0) > 0 && (
-                            <div className="bg-red-500" style={{ width: `${(sevCounts['Critical'] / total) * 100}%` }} />
+                            <div className="bg-red-600" style={{ width: `${(sevCounts['Critical'] / total) * 100}%` }} />
                           )}
                           {(sevCounts['High'] || 0) > 0 && (
-                            <div className="bg-orange-400" style={{ width: `${(sevCounts['High'] / total) * 100}%` }} />
+                            <div className="bg-amber-500" style={{ width: `${(sevCounts['High'] / total) * 100}%` }} />
                           )}
                           {(sevCounts['Medium'] || 0) > 0 && (
-                            <div className="bg-yellow-400" style={{ width: `${(sevCounts['Medium'] / total) * 100}%` }} />
+                            <div className="bg-orange-400" style={{ width: `${(sevCounts['Medium'] / total) * 100}%` }} />
                           )}
                           {(sevCounts['Low'] || 0) > 0 && (
-                            <div className="bg-green-400" style={{ width: `${(sevCounts['Low'] / total) * 100}%` }} />
+                            <div className="bg-blue-500" style={{ width: `${(sevCounts['Low'] / total) * 100}%` }} />
                           )}
                         </div>
                         <p className="text-[10px] text-gray-400 mt-1">

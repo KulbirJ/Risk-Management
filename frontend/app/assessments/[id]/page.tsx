@@ -657,22 +657,22 @@ export default function AssessmentDetailPage() {
             {threats.length > 0 && (
               <div className="flex items-center gap-1.5 text-xs">
                 {(severityCounts['Critical'] || 0) > 0 && (
-                  <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full font-medium">
+                  <span className="px-2 py-0.5 bg-red-600 text-white rounded-full font-semibold">
                     {severityCounts['Critical']} Critical
                   </span>
                 )}
                 {(severityCounts['High'] || 0) > 0 && (
-                  <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full font-medium">
+                  <span className="px-2 py-0.5 bg-amber-500 text-white rounded-full font-semibold">
                     {severityCounts['High']} High
                   </span>
                 )}
                 {(severityCounts['Medium'] || 0) > 0 && (
-                  <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full font-medium">
+                  <span className="px-2 py-0.5 bg-orange-400 text-white rounded-full font-semibold">
                     {severityCounts['Medium']} Medium
                   </span>
                 )}
                 {(severityCounts['Low'] || 0) > 0 && (
-                  <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                  <span className="px-2 py-0.5 bg-blue-500 text-white rounded-full font-semibold">
                     {severityCounts['Low']} Low
                   </span>
                 )}

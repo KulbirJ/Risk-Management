@@ -28,17 +28,19 @@ export function Badge({ children, variant = 'default', size = 'md' }: BadgeProps
 }
 
 export function SeverityBadge({ severity }: { severity: string }) {
-  const variantMap: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
-    Low: 'success',
-    Medium: 'warning',
-    High: 'danger',
-    Critical: 'danger',
+  const colorMap: Record<string, string> = {
+    Critical: 'bg-red-600 text-white',
+    High:     'bg-amber-500 text-white',
+    Medium:   'bg-orange-400 text-white',
+    Low:      'bg-blue-500 text-white',
   };
 
+  const classes = colorMap[severity] ?? 'bg-gray-200 text-gray-800';
+
   return (
-    <Badge variant={variantMap[severity] || 'default'}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-sm font-semibold ${classes}`}>
       {severity}
-    </Badge>
+    </span>
   );
 }
 
