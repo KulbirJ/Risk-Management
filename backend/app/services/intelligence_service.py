@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..models.models import (
     Assessment, Threat, Recommendation, ThreatCatalogue, Evidence, IntelligenceJob,
     ThreatAttackMapping, KillChain, ActiveRisk, ThreatIntelEnrichment,
+    ComplianceMapping,
 )
 from ..services.bedrock_service import bedrock_service
 from ..core.config import settings
@@ -425,6 +426,11 @@ class IntelligenceService:
         db.query(Evidence).filter(
             Evidence.threat_id.in_(ai_threat_ids)
         ).update({Evidence.threat_id: None}, synchronize_session="fetch")
+
+        # 6b. Compliance mappings linked to AI threats
+        db.query(ComplianceMapping).filter(
+            ComplianceMapping.threat_id.in_(ai_threat_ids)
+        ).delete(synchronize_session="fetch")
 
         # 7. Now safe to delete the threats themselves
         threat_count = db.query(Threat).filter(
