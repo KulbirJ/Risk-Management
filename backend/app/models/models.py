@@ -545,3 +545,135 @@ class ThreatControlDefault(Base):
     control_id_ref = Column(String(50), nullable=False)               # e.g. "AC-2", "A.8.7", "CIS-10"
     confidence = Column(Integer, default=90)                          # static confidence score
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+# ─────────────────────────────────────────────────────────────────
+# Supply Chain Risk Management Models
+# Based on CCCS ITSAP.10.070 3-step framework:
+#   Step 1 — Technology Sensitivity
+#   Step 2 — Supplier Confidence
+#   Step 3 — Deployment Risk
+# ─────────────────────────────────────────────────────────────────
+
+
+class SupplyChainAssessment(Base):
+    """Top-level supply chain risk assessment (CCCS ITSAP.10.070)."""
+    __tablename__ = "supply_chain_assessments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    owner_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    scope = Column(Text, nullable=True)
+    industry_sector = Column(String(50), nullable=True)
+    status = Column(String(20), default="draft")  # draft, in_review, completed, archived
+
+    # Step 1 — Technology Sensitivity
+    technology_sensitivity = Column(String(20), default="Medium")  # Low, Medium, High
+    technology_function = Column(Text, nullable=True)              # What the technology does
+    data_classification = Column(String(50), nullable=True)        # public, internal, confidential, secret
+    ecosystem_importance = Column(Text, nullable=True)             # Critical infra, GC network, etc.
+
+    # Step 3 — Deployment context (overall org posture)
+    deployment_environment = Column(String(50), nullable=True)     # cloud, on-premise, hybrid
+    cyber_defense_level = Column(String(20), default="Medium")     # Low, Medium, High
+    deployment_notes = Column(Text, nullable=True)
+
+    # Computed overall risk
+    overall_risk_score = Column(Integer, default=0)    # 0-100
+    overall_risk_level = Column(String(20), default="Medium")  # Low, Medium, High, Critical
+
+    # SBOM metadata
+    sbom_uploaded = Column(Boolean, default=False)
+    sbom_format = Column(String(20), nullable=True)    # cyclonedx, spdx, manual
+    sbom_parsed_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    vendors = relationship("SupplyChainVendor", back_populates="assessment", cascade="all, delete-orphan")
+    dependencies = relationship("SupplyChainDependency", back_populates="assessment", cascade="all, delete-orphan")
+
+
+class SupplyChainVendor(Base):
+    """Vendor/supplier record — CCCS Step 2: Assess Supplier Confidence."""
+    __tablename__ = "supply_chain_vendors"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    assessment_id = Column(UUID(as_uuid=True), ForeignKey("supply_chain_assessments.id"), nullable=False, index=True)
+
+    name = Column(String(255), nullable=False)
+    website = Column(String(512), nullable=True)
+    vendor_type = Column(String(50), default="software")  # software, hardware, service, cloud, managed_service
+    country_of_origin = Column(String(100), nullable=True)
+    description = Column(Text, nullable=True)
+
+    # CCCS Step 2a — Supplier Ownership factors
+    foci_risk = Column(String(20), default="Low")             # Foreign Ownership, Control & Influence: Low, Medium, High
+    geopolitical_risk = Column(String(20), default="Low")     # Geopolitical / legislative risk: Low, Medium, High
+    business_practices_risk = Column(String(20), default="Low")  # Ethics, transparency, contracting: Low, Medium, High
+
+    # CCCS Step 2b — Cyber Maturity factors
+    security_certifications = Column(JSONB, default=[])           # ["ISO27001", "SOC2", "CSE-CCCS", "FedRAMP"]
+    data_protection_maturity = Column(String(20), default="Medium")   # Low, Medium, High
+    vuln_mgmt_maturity = Column(String(20), default="Medium")         # Low, Medium, High
+    security_policies_maturity = Column(String(20), default="Medium") # Low, Medium, High
+
+    # Computed supplier confidence level
+    # High = trustworthy (low risk), Medium = uncertain, Low = low confidence (high risk)
+    supplier_confidence_level = Column(String(20), default="Medium")  # High, Medium, Low
+    supplier_risk_score = Column(Integer, default=50)                  # 0-100 (higher = riskier)
+
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    assessment = relationship("SupplyChainAssessment", back_populates="vendors")
+    dependencies = relationship("SupplyChainDependency", back_populates="vendor")
+
+
+class SupplyChainDependency(Base):
+    """Software/hardware dependency — tracks CVEs and ML-enriched risk per component."""
+    __tablename__ = "supply_chain_dependencies"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    assessment_id = Column(UUID(as_uuid=True), ForeignKey("supply_chain_assessments.id"), nullable=False, index=True)
+    vendor_id = Column(UUID(as_uuid=True), ForeignKey("supply_chain_vendors.id"), nullable=True)
+
+    name = Column(String(255), nullable=False)
+    version = Column(String(100), nullable=True)
+    package_type = Column(String(50), nullable=True)    # npm, pip, maven, nuget, gem, go, cargo, container
+    source = Column(String(20), default="direct")       # direct, transitive
+    license = Column(String(100), nullable=True)
+    repository_url = Column(String(512), nullable=True)
+    sbom_source = Column(String(20), nullable=True)     # cyclonedx, spdx, manual
+
+    # CVE / vulnerability data
+    cve_ids = Column(JSONB, default=[])                 # ["CVE-2021-44228", ...]
+    cvss_score = Column(String(10), nullable=True)
+
+    # ML-enriched risk (from cyber-risk-ml-api)
+    risk_score = Column(Integer, default=0)             # 0-100
+    risk_level = Column(String(20), default="Low")      # Low, Medium, High, Critical
+    ml_enriched = Column(Boolean, default=False)
+    enriched_at = Column(DateTime(timezone=True), nullable=True)
+    feature_vector = Column(JSONB, nullable=True)       # Raw ML features
+
+    # Key risk signals
+    is_in_cisa_kev = Column(Boolean, default=False)
+    has_public_poc = Column(Boolean, default=False)
+    has_patch = Column(Boolean, default=False)
+    epss_score = Column(String(20), nullable=True)      # Exploit Prediction Scoring System
+
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    assessment = relationship("SupplyChainAssessment", back_populates="dependencies")
+    vendor = relationship("SupplyChainVendor", back_populates="dependencies")

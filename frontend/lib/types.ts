@@ -694,3 +694,156 @@ export interface ComplianceAutoMapResult {
   saved_count: number;
   skipped: number;
 }
+
+// ─────────────────────────────────────────────────────────────
+// Supply Chain Risk Assessment (CCCS ITSAP.10.070)
+// ─────────────────────────────────────────────────────────────
+
+export interface SupplyChainAssessment {
+  id: string;
+  tenant_id: string;
+  owner_user_id: string;
+  title: string;
+  description?: string;
+  scope?: string;
+  industry_sector?: string;
+  status: 'draft' | 'in_review' | 'completed' | 'archived';
+  // Step 1 — Technology Sensitivity
+  technology_sensitivity: 'Low' | 'Medium' | 'High';
+  technology_function?: string;
+  data_classification?: string;
+  ecosystem_importance?: string;
+  // Step 3 — Deployment Risk
+  deployment_environment?: string;
+  cyber_defense_level: 'Low' | 'Medium' | 'High';
+  deployment_notes?: string;
+  // Computed
+  overall_risk_score?: number;
+  overall_risk_level?: 'Low' | 'Medium' | 'High' | 'Critical';
+  sbom_uploaded: boolean;
+  sbom_format?: string;
+  sbom_parsed_at?: string;
+  vendor_count?: number;
+  dependency_count?: number;
+  critical_dependency_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupplyChainAssessmentCreate {
+  title: string;
+  description?: string;
+  scope?: string;
+  industry_sector?: string;
+  technology_sensitivity?: 'Low' | 'Medium' | 'High';
+  technology_function?: string;
+  data_classification?: string;
+  ecosystem_importance?: string;
+  deployment_environment?: string;
+  cyber_defense_level?: 'Low' | 'Medium' | 'High';
+  deployment_notes?: string;
+}
+
+export interface SupplyChainVendor {
+  id: string;
+  tenant_id: string;
+  assessment_id: string;
+  name: string;
+  website?: string;
+  vendor_type?: string;
+  country_of_origin?: string;
+  foci_risk: 'Low' | 'Medium' | 'High';
+  geopolitical_risk: 'Low' | 'Medium' | 'High';
+  business_practices_risk: 'Low' | 'Medium' | 'High';
+  security_certifications: string[];
+  data_protection_maturity: 'Low' | 'Medium' | 'High';
+  vuln_mgmt_maturity: 'Low' | 'Medium' | 'High';
+  security_policies_maturity: 'Low' | 'Medium' | 'High';
+  supplier_confidence_level?: 'High' | 'Medium' | 'Low';
+  supplier_risk_score?: number;
+  dependency_count?: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupplyChainVendorCreate {
+  assessment_id: string;
+  name: string;
+  website?: string;
+  vendor_type?: string;
+  country_of_origin?: string;
+  foci_risk?: 'Low' | 'Medium' | 'High';
+  geopolitical_risk?: 'Low' | 'Medium' | 'High';
+  business_practices_risk?: 'Low' | 'Medium' | 'High';
+  security_certifications?: string[];
+  data_protection_maturity?: 'Low' | 'Medium' | 'High';
+  vuln_mgmt_maturity?: 'Low' | 'Medium' | 'High';
+  security_policies_maturity?: 'Low' | 'Medium' | 'High';
+  notes?: string;
+}
+
+export interface SupplyChainDependency {
+  id: string;
+  tenant_id: string;
+  assessment_id: string;
+  vendor_id?: string;
+  name: string;
+  version?: string;
+  package_type?: string;
+  source: 'direct' | 'transitive';
+  license?: string;
+  repository_url?: string;
+  sbom_source?: string;
+  cve_ids: string[];
+  cvss_score?: number;
+  risk_score?: number;
+  risk_level?: 'Low' | 'Medium' | 'High' | 'Critical';
+  ml_enriched: boolean;
+  enriched_at?: string;
+  is_in_cisa_kev: boolean;
+  has_public_poc: boolean;
+  has_patch: boolean;
+  epss_score?: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupplyChainDependencyCreate {
+  assessment_id: string;
+  vendor_id?: string;
+  name: string;
+  version?: string;
+  package_type?: string;
+  source?: 'direct' | 'transitive';
+  license?: string;
+  repository_url?: string;
+  cve_ids?: string[];
+  cvss_score?: number;
+  notes?: string;
+}
+
+export interface SCRiskScoreResponse {
+  assessment_id: string;
+  technology_sensitivity: string;
+  avg_supplier_risk: number;
+  deployment_risk: string;
+  overall_risk_score: number;
+  overall_risk_level: string;
+  vendor_scores: { vendor_id: string; name: string; risk_score: number; confidence: string }[];
+  dependency_critical_count: number;
+}
+
+export interface SBOMParseResponse {
+  format_detected: string;
+  component_count: number;
+  components: SupplyChainDependencyCreate[];
+  warnings: string[];
+}
+
+export interface SCEnrichResponse {
+  enriched: number;
+  skipped: number;
+  errors: string[];
+}

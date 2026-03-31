@@ -44,6 +44,15 @@ import type {
   ComplianceSummary,
   ComplianceGaps,
   ComplianceAutoMapResult,
+  SupplyChainAssessment,
+  SupplyChainAssessmentCreate,
+  SupplyChainVendor,
+  SupplyChainVendorCreate,
+  SupplyChainDependency,
+  SupplyChainDependencyCreate,
+  SCRiskScoreResponse,
+  SBOMParseResponse,
+  SCEnrichResponse,
 } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -709,6 +718,92 @@ class APIClient {
   async getComplianceGaps(frameworkKey: string, assessmentId?: string): Promise<ComplianceGaps> {
     const { data } = await this.client.get('/compliance/gaps', {
       params: { framework_key: frameworkKey, ...(assessmentId && { assessment_id: assessmentId }) },
+    });
+    return data;
+  }
+
+  // ─── Supply Chain ────────────────────────────────────────────────────────────
+
+  async listSupplyChainAssessments(params?: { skip?: number; limit?: number; status?: string }): Promise<SupplyChainAssessment[]> {
+    const { data } = await this.client.get('/supply-chain/', { params });
+    return data;
+  }
+
+  async createSupplyChainAssessment(payload: SupplyChainAssessmentCreate): Promise<SupplyChainAssessment> {
+    const { data } = await this.client.post('/supply-chain/', payload);
+    return data;
+  }
+
+  async getSupplyChainAssessment(id: string): Promise<SupplyChainAssessment> {
+    const { data } = await this.client.get(`/supply-chain/${id}`);
+    return data;
+  }
+
+  async updateSupplyChainAssessment(id: string, payload: Partial<SupplyChainAssessmentCreate> & { status?: string }): Promise<SupplyChainAssessment> {
+    const { data } = await this.client.put(`/supply-chain/${id}`, payload);
+    return data;
+  }
+
+  async deleteSupplyChainAssessment(id: string): Promise<void> {
+    await this.client.delete(`/supply-chain/${id}`);
+  }
+
+  async recalculateSupplyChainScore(id: string): Promise<SCRiskScoreResponse> {
+    const { data } = await this.client.post(`/supply-chain/${id}/score`);
+    return data;
+  }
+
+  async parseSBOM(assessmentId: string, sbomContent: object, sbomFormat: string): Promise<SBOMParseResponse> {
+    const { data } = await this.client.post(`/supply-chain/${assessmentId}/sbom/parse`, {
+      sbom_content: sbomContent,
+      sbom_format: sbomFormat,
+    });
+    return data;
+  }
+
+  async listSupplyChainVendors(assessmentId: string): Promise<SupplyChainVendor[]> {
+    const { data } = await this.client.get(`/supply-chain/${assessmentId}/vendors`);
+    return data;
+  }
+
+  async createSupplyChainVendor(assessmentId: string, payload: SupplyChainVendorCreate): Promise<SupplyChainVendor> {
+    const { data } = await this.client.post(`/supply-chain/${assessmentId}/vendors`, {
+      ...payload,
+      assessment_id: assessmentId,
+    });
+    return data;
+  }
+
+  async updateSupplyChainVendor(assessmentId: string, vendorId: string, payload: Partial<SupplyChainVendorCreate>): Promise<SupplyChainVendor> {
+    const { data } = await this.client.put(`/supply-chain/${assessmentId}/vendors/${vendorId}`, payload);
+    return data;
+  }
+
+  async deleteSupplyChainVendor(assessmentId: string, vendorId: string): Promise<void> {
+    await this.client.delete(`/supply-chain/${assessmentId}/vendors/${vendorId}`);
+  }
+
+  async listSupplyChainDependencies(assessmentId: string, params?: { vendor_id?: string; risk_level?: string }): Promise<SupplyChainDependency[]> {
+    const { data } = await this.client.get(`/supply-chain/${assessmentId}/dependencies`, { params });
+    return data;
+  }
+
+  async createSupplyChainDependency(assessmentId: string, payload: SupplyChainDependencyCreate): Promise<SupplyChainDependency> {
+    const { data } = await this.client.post(`/supply-chain/${assessmentId}/dependencies`, {
+      ...payload,
+      assessment_id: assessmentId,
+    });
+    return data;
+  }
+
+  async bulkCreateSupplyChainDependencies(assessmentId: string, deps: SupplyChainDependencyCreate[]): Promise<SupplyChainDependency[]> {
+    const { data } = await this.client.post(`/supply-chain/${assessmentId}/dependencies/bulk`, deps);
+    return data;
+  }
+
+  async enrichSupplyChainDependencies(assessmentId: string, dependencyIds?: string[]): Promise<SCEnrichResponse> {
+    const { data } = await this.client.post(`/supply-chain/${assessmentId}/dependencies/enrich`, {
+      dependency_ids: dependencyIds ?? null,
     });
     return data;
   }

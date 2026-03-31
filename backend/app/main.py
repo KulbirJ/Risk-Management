@@ -490,7 +490,7 @@ def create_app() -> FastAPI:
             return {"status": "error", "message": str(e)}
 
     # Include API routers
-    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack, intel, compliance
+    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack, intel, compliance, supply_chain
     
     app.include_router(
         assessments.router,
@@ -541,6 +541,11 @@ def create_app() -> FastAPI:
         compliance.router,
         prefix="/api/v1/compliance",
         tags=["compliance"]
+    )
+    app.include_router(
+        supply_chain.router,
+        prefix="/api/v1/supply-chain",
+        tags=["supply-chain"]
     )
 
     # ML routers — only loaded when numpy/scikit-learn/networkx are available

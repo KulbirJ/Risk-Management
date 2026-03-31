@@ -19,6 +19,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   X,
+  Package,
 } from 'lucide-react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { isCognitoEnabled } from '../lib/amplify-config';
@@ -33,6 +34,7 @@ const navigation = [
   { name: 'Assessments', href: '/assessments', icon: FileText },
   { name: 'Intelligence', href: '/intelligence', icon: Brain },
   { name: 'Compliance', href: '/compliance', icon: ClipboardCheck },
+  { name: 'Supply Chain', href: '/supply-chain', icon: Package },
   { name: 'Risk Register', href: '/active-risks', icon: AlertTriangle },
   { name: 'Audit Logs', href: '/audit-logs', icon: History },
 ];
