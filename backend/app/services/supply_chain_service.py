@@ -357,7 +357,7 @@ def delete_dependency(db: Session, dep: SupplyChainDependency) -> None:
 
 def _rule_based_dep_score(
     cve_ids: list[str],
-    cvss_score: Optional[float],
+    cvss_score,
     in_kev: bool,
     has_poc: bool,
 ) -> tuple[int, str]:
@@ -366,7 +366,10 @@ def _rule_based_dep_score(
     if cve_ids:
         score += min(len(cve_ids) * 10, 30)
     if cvss_score is not None:
-        score += int(cvss_score / 10 * 50)
+        try:
+            score += int(float(cvss_score) / 10 * 50)
+        except (ValueError, TypeError):
+            pass
     if in_kev:
         score += 20
     if has_poc:
