@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { Search, Filter, Sparkles } from 'lucide-react';
-import { LoadingPage } from '../../components/LoadingSpinner';
+import { SkeletonTable } from '../../components/LoadingSpinner';
 import { Alert } from '../../components/Alert';
 import { StatusBadge, SeverityBadge } from '../../components/Badge';
 import { Button } from '../../components/Button';
+import { EmptyState } from '../../components/EmptyState';
+import { Breadcrumb } from '../../components/Breadcrumb';
 import ActiveRiskModal, { ActiveRiskFormData } from '../../components/ActiveRiskModal';
 import { AiBadge } from '../../components/IntelligencePanel';
 import apiClient from '../../lib/api-client';
@@ -97,14 +99,21 @@ export default function ActiveRisksPage() {
   };
 
   if (loading) {
-    return <LoadingPage />;
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="skeleton h-8 w-48 rounded" />
+        <SkeletonTable rows={6} />
+      </div>
+    );
   }
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Risk Register</h1>
-        <p className="text-gray-600 mt-1">Active risks requiring attention and management</p>
+    <div className="space-y-6 animate-fade-in">
+      <Breadcrumb items={[{ label: 'Risk Register' }]} />
+
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Risk Register</h1>
+        <p className="text-muted-foreground mt-1">Active risks requiring attention and management</p>
       </div>
 
       {error && (
@@ -112,26 +121,26 @@ export default function ActiveRisksPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-sm font-medium text-gray-600 mb-4">By Status</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-card rounded-xl border border-border p-5">
+          <h3 className="text-sm font-medium text-muted-foreground mb-4">By Status</h3>
           <div className="grid grid-cols-4 gap-4">
             {Object.entries(risksByStatus).map(([status, count]) => (
               <div key={status} className="text-center">
-                <p className="text-2xl font-bold text-gray-900">{count}</p>
-                <p className="text-xs text-gray-500 mt-1 capitalize">{status}</p>
+                <p className="text-2xl font-bold text-foreground">{count}</p>
+                <p className="text-xs text-muted-foreground mt-1 capitalize">{status}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-sm font-medium text-gray-600 mb-4">By Severity</h3>
+        <div className="bg-card rounded-xl border border-border p-5">
+          <h3 className="text-sm font-medium text-muted-foreground mb-4">By Severity</h3>
           <div className="grid grid-cols-4 gap-4">
             {Object.entries(risksBySeverity).map(([severity, count]) => (
               <div key={severity} className="text-center">
-                <p className="text-2xl font-bold text-gray-900">{count}</p>
-                <p className="text-xs text-gray-500 mt-1">{severity}</p>
+                <p className="text-2xl font-bold text-foreground">{count}</p>
+                <p className="text-xs text-muted-foreground mt-1">{severity}</p>
               </div>
             ))}
           </div>
@@ -139,22 +148,22 @@ export default function ActiveRisksPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-        <div className="flex gap-4">
+      <div className="bg-card rounded-xl border border-border p-4">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search risks..."
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            className="px-4 py-2 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
           >
             <option value="all">All Status</option>
             <option value="open">Open</option>
@@ -167,47 +176,51 @@ export default function ActiveRisksPage() {
 
       {/* Risks Table */}
       {filteredRisks.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <p className="text-gray-500">No active risks found</p>
+        <div className="bg-card rounded-xl border border-border">
+          <EmptyState
+            icon={filter ? 'search' : 'risks'}
+            title={filter ? 'No matching risks' : 'No active risks'}
+            description={filter ? 'Try adjusting your search or filters' : 'Risks will appear here when threats are sent to the risk register'}
+          />
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+        <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+          <table className="min-w-full divide-y divide-border">
+            <thead>
+              <tr className="bg-muted/50">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Risk Statement
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Severity
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Risk Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Review Date
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-border">
               {filteredRisks.map((risk) => (
                 <tr 
                   key={risk.id} 
-                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="hover:bg-muted/30 cursor-pointer transition-colors"
                   onClick={() => openEditModal(risk)}
                 >
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-900 max-w-md">
+                      <span className="text-sm font-medium text-foreground max-w-md">
                         {risk.title}
                       </span>
                       {risk.detected_by === 'ai_intelligence' && <AiBadge />}
                     </div>
                     {risk.mitigation_plan && (
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-xs text-muted-foreground mt-1">
                         {risk.mitigation_plan}
                       </div>
                     )}
@@ -217,16 +230,16 @@ export default function ActiveRisksPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      risk.risk_status === 'Completed' ? 'bg-green-100 text-green-800' :
-                      risk.risk_status === 'Ongoing' ? 'bg-blue-100 text-blue-800' :
-                      risk.risk_status === 'Delayed' ? 'bg-red-100 text-red-800' :
-                      risk.risk_status === 'Accepted' ? 'bg-purple-100 text-purple-800' :
-                      'bg-gray-100 text-gray-800'
+                      risk.risk_status === 'Completed' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                      risk.risk_status === 'Ongoing' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                      risk.risk_status === 'Delayed' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                      risk.risk_status === 'Accepted' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
+                      'bg-muted text-muted-foreground'
                     }`}>
                       {risk.risk_status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                     {risk.review_cycle_days ? `Every ${risk.review_cycle_days} days` : 'Not set'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>

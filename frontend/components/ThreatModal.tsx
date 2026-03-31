@@ -93,15 +93,15 @@ export function ThreatModal({ isOpen, onClose, onSubmit, assessmentId, threat }:
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+      <div className="bg-card rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-border shadow-xl animate-scale-in">
+        <div className="flex items-center justify-between p-6 border-b border-border">
+          <h2 className="text-xl font-semibold text-foreground">
             {isEditMode ? 'Edit Threat' : 'Add New Threat'}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-muted-foreground hover:text-foreground transition-colors"
             disabled={loading}
           >
             <X className="w-5 h-5" />
@@ -110,13 +110,13 @@ export function ThreatModal({ isOpen, onClose, onSubmit, assessmentId, threat }:
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 text-sm">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 text-red-800 dark:text-red-400 rounded-xl p-3 text-sm">
               {error}
             </div>
           )}
 
           <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="title" className="block text-sm font-medium text-foreground mb-2">
               Threat Title *
             </label>
             <input
@@ -125,13 +125,13 @@ export function ThreatModal({ isOpen, onClose, onSubmit, assessmentId, threat }:
               required
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-4 py-2 bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
               placeholder="e.g., SQL Injection Attack"
             />
           </div>
 
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="description" className="block text-sm font-medium text-foreground mb-2">
               Description
             </label>
             <textarea
@@ -139,13 +139,13 @@ export function ThreatModal({ isOpen, onClose, onSubmit, assessmentId, threat }:
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-4 py-2 bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
               placeholder="Describe the threat..."
             />
           </div>
 
           <div>
-            <label htmlFor="recommendation" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="recommendation" className="block text-sm font-medium text-foreground mb-2">
               Recommendation
             </label>
             <textarea
@@ -153,14 +153,14 @@ export function ThreatModal({ isOpen, onClose, onSubmit, assessmentId, threat }:
               value={formData.recommendation}
               onChange={(e) => setFormData({ ...formData, recommendation: e.target.value })}
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-4 py-2 bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
               placeholder="Recommendation for mitigating this threat..."
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label htmlFor="likelihood" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="likelihood" className="block text-sm font-medium text-foreground mb-2">
                 Likelihood *
               </label>
               <select
@@ -168,7 +168,7 @@ export function ThreatModal({ isOpen, onClose, onSubmit, assessmentId, threat }:
                 required
                 value={formData.likelihood}
                 onChange={(e) => setFormData({ ...formData, likelihood: e.target.value as any })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-4 py-2 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
               >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
@@ -178,7 +178,7 @@ export function ThreatModal({ isOpen, onClose, onSubmit, assessmentId, threat }:
             </div>
 
             <div>
-              <label htmlFor="impact" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="impact" className="block text-sm font-medium text-foreground mb-2">
                 Impact *
               </label>
               <select
@@ -186,7 +186,7 @@ export function ThreatModal({ isOpen, onClose, onSubmit, assessmentId, threat }:
                 required
                 value={formData.impact}
                 onChange={(e) => setFormData({ ...formData, impact: e.target.value as any })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-4 py-2 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
               >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
@@ -198,7 +198,7 @@ export function ThreatModal({ isOpen, onClose, onSubmit, assessmentId, threat }:
 
           {isEditMode && (
             <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="status" className="block text-sm font-medium text-foreground mb-2">
                 Status *
               </label>
               <select
@@ -206,7 +206,7 @@ export function ThreatModal({ isOpen, onClose, onSubmit, assessmentId, threat }:
                 required
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-4 py-2 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
               >
                 <option value="identified">Identified</option>
                 <option value="in_review">In Review</option>

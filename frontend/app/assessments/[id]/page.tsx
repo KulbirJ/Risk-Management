@@ -5,8 +5,10 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Edit, Trash2, AlertTriangle, Lightbulb, Shield, Upload, FileText, Download, X, Check, Loader2, Sparkles, UserCheck, ChevronDown, ChevronRight, ArrowRightCircle, Brain, Network, Boxes, Database, MoreHorizontal, Wrench } from 'lucide-react';
 import { Button } from '../../../components/Button';
-import { LoadingPage } from '../../../components/LoadingSpinner';
+import { SkeletonDashboard } from '../../../components/LoadingSpinner';
 import { Alert } from '../../../components/Alert';
+import { Breadcrumb } from '../../../components/Breadcrumb';
+import { EmptyState } from '../../../components/EmptyState';
 import { StatusBadge, SeverityBadge } from '../../../components/Badge';
 import { ThreatModal, ThreatFormData } from '../../../components/ThreatModal';
 import { IntelligencePanel, AiBadge } from '../../../components/IntelligencePanel';
@@ -401,7 +403,12 @@ export default function AssessmentDetailPage() {
   };
 
   if (loading) {
-    return <LoadingPage />;
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="skeleton h-8 w-64 rounded" />
+        <SkeletonDashboard />
+      </div>
+    );
   }
 
   if (!assessment) {
@@ -444,8 +451,13 @@ export default function AssessmentDetailPage() {
   ].filter(Boolean).join(' · ') || 'No data yet';
 
   return (
-    <div>
-      <Link href="/assessments" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-4">
+    <div className="space-y-4 animate-fade-in">
+      <Breadcrumb items={[
+        { label: 'Assessments', href: '/assessments' },
+        { label: assessment.title || 'Detail' },
+      ]} />
+
+      <Link href="/assessments" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-4 h-4 mr-2" />
         Back to Assessments
       </Link>
@@ -457,16 +469,16 @@ export default function AssessmentDetailPage() {
       {/* ═══════════════════════════════════════════════════════════
           ZONE A — Context Bar (compact header)
          ═══════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-lg border border-gray-200 p-5 mb-4">
+      <div className="bg-card rounded-xl border border-border p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-bold text-gray-900 truncate">{assessment.title}</h1>
+              <h1 className="text-2xl font-bold text-foreground truncate">{assessment.title}</h1>
               <StatusBadge status={assessment.status} />
               <SeverityBadge severity={assessment.overall_impact || 'Medium'} />
             </div>
             {assessment.description && (
-              <p className="text-sm text-gray-600 line-clamp-1">{assessment.description}</p>
+              <p className="text-sm text-muted-foreground line-clamp-1">{assessment.description}</p>
             )}
           </div>
 
@@ -479,16 +491,16 @@ export default function AssessmentDetailPage() {
             <div className="relative" ref={overflowRef}>
               <button
                 onClick={() => setShowOverflow(!showOverflow)}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
                 title="More actions"
               >
                 <MoreHorizontal className="w-5 h-5" />
               </button>
               {showOverflow && (
-                <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                <div className="absolute right-0 top-full mt-1 w-44 bg-card rounded-xl shadow-lg border border-border py-1 z-20">
                   <Link
                     href={`/assessments/${assessmentId}/report`}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted"
                     onClick={() => setShowOverflow(false)}
                   >
                     <FileText className="w-4 h-4" />
@@ -496,15 +508,15 @@ export default function AssessmentDetailPage() {
                   </Link>
                   <button
                     onClick={() => { setShowOverflow(false); handleEditAssessment(); }}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
                   >
                     <Edit className="w-4 h-4" />
                     Edit Assessment
                   </button>
-                  <hr className="my-1 border-gray-100" />
+                  <hr className="my-1 border-border" />
                   <button
                     onClick={() => { setShowOverflow(false); handleDeleteAssessment(); }}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 w-full text-left"
                   >
                     <Trash2 className="w-4 h-4" />
                     Delete
@@ -518,7 +530,7 @@ export default function AssessmentDetailPage() {
         {/* Expandable metadata row */}
         <button
           onClick={() => setMetadataExpanded(!metadataExpanded)}
-          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 mt-2 transition-colors"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-2 transition-colors"
         >
           <ChevronRight className={`w-3 h-3 transition-transform ${metadataExpanded ? 'rotate-90' : ''}`} />
           {assessment.industry_sector
@@ -529,78 +541,78 @@ export default function AssessmentDetailPage() {
         </button>
 
         {metadataExpanded && !isEditingAssessment && (
-          <div className="grid grid-cols-4 gap-6 text-sm mt-3 pt-3 border-t border-gray-100">
+          <div className="grid grid-cols-4 gap-6 text-sm mt-3 pt-3 border-t border-border">
             <div>
-              <span className="text-gray-500">Overall Impact:</span>
-              <p className="font-medium capitalize mt-0.5">{assessment.overall_impact}</p>
+              <span className="text-muted-foreground">Overall Impact:</span>
+              <p className="font-medium capitalize mt-0.5 text-foreground">{assessment.overall_impact}</p>
             </div>
             <div>
-              <span className="text-gray-500">Industry Sector:</span>
-              <p className="font-medium capitalize mt-0.5">
+              <span className="text-muted-foreground">Industry Sector:</span>
+              <p className="font-medium capitalize mt-0.5 text-foreground">
                 {assessment.industry_sector
                   ? assessment.industry_sector.replace(/_/g, ' ')
-                  : <span className="text-gray-400 italic">Not set</span>}
+                  : <span className="text-muted-foreground italic">Not set</span>}
               </p>
             </div>
             <div>
-              <span className="text-gray-500">Created:</span>
-              <p className="font-medium mt-0.5">{format(new Date(assessment.created_at), 'MMM d, yyyy')}</p>
+              <span className="text-muted-foreground">Created:</span>
+              <p className="font-medium mt-0.5 text-foreground">{format(new Date(assessment.created_at), 'MMM d, yyyy')}</p>
             </div>
             <div>
-              <span className="text-gray-500">Last Updated:</span>
-              <p className="font-medium mt-0.5">{format(new Date(assessment.updated_at), 'MMM d, yyyy')}</p>
+              <span className="text-muted-foreground">Last Updated:</span>
+              <p className="font-medium mt-0.5 text-foreground">{format(new Date(assessment.updated_at), 'MMM d, yyyy')}</p>
             </div>
           </div>
         )}
 
         {/* Inline Edit Form (shown when editing) */}
         {isEditingAssessment && (
-          <div className="mt-4 space-y-4 border-t border-gray-200 pt-4">
+          <div className="mt-4 space-y-4 border-t border-border pt-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Title</label>
               <input
                 type="text"
                 value={editFormData.title}
                 onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Description</label>
               <textarea
                 value={editFormData.description}
                 onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
                 rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">System Background</label>
+                <label className="block text-sm font-medium text-foreground mb-1">System Background</label>
                 <textarea
                   value={editFormData.system_background}
                   onChange={(e) => setEditFormData({ ...editFormData, system_background: e.target.value })}
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Scope</label>
+                <label className="block text-sm font-medium text-foreground mb-1">Scope</label>
                 <textarea
                   value={editFormData.scope}
                   onChange={(e) => setEditFormData({ ...editFormData, scope: e.target.value })}
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
                 />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Industry Sector</label>
+                <label className="block text-sm font-medium text-foreground mb-1">Industry Sector</label>
                 <select
                   value={editFormData.industry_sector}
                   onChange={(e) => setEditFormData({ ...editFormData, industry_sector: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
                 >
                   {INDUSTRY_SECTORS.map((s) => (
                     <option key={s.value} value={s.value}>{s.label}</option>
@@ -608,11 +620,11 @@ export default function AssessmentDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Overall Impact</label>
+                <label className="block text-sm font-medium text-foreground mb-1">Overall Impact</label>
                 <select
                   value={editFormData.overall_impact}
                   onChange={(e) => setEditFormData({ ...editFormData, overall_impact: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
                 >
                   <option value="Low">Low</option>
                   <option value="Medium">Medium</option>
@@ -621,11 +633,11 @@ export default function AssessmentDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-sm font-medium text-foreground mb-1">Status</label>
                 <select
                   value={editFormData.status}
                   onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
                 >
                   <option value="draft">Draft</option>
                   <option value="in_review">In Review</option>
@@ -653,7 +665,7 @@ export default function AssessmentDetailPage() {
         {/* Severity summary strip + Add Threat */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-amber-500" />
               Threats ({threats.length})
             </h2>
@@ -689,7 +701,7 @@ export default function AssessmentDetailPage() {
             </Button>
             <button
               onClick={() => setThreatsExpanded(!threatsExpanded)}
-              className="p-1.5 text-gray-400 hover:text-gray-600 rounded transition-colors"
+              className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
             >
               <ChevronDown className={`w-5 h-5 transition-transform ${threatsExpanded ? 'rotate-0' : '-rotate-90'}`} />
             </button>
@@ -710,13 +722,13 @@ export default function AssessmentDetailPage() {
                   onClick={() => setThreatViewTab(tab.key)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
                     threatViewTab === tab.key
-                      ? 'bg-gray-900 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      ? 'bg-primary text-white'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
                   }`}
                 >
                   {tab.icon && <tab.icon className="w-3 h-3" />}
                   {tab.label}
-                  <span className={`ml-0.5 ${threatViewTab === tab.key ? 'text-gray-300' : 'text-gray-400'}`}>
+                  <span className={`ml-0.5 ${threatViewTab === tab.key ? 'text-white/70' : 'text-muted-foreground'}`}>
                     {tab.count}
                   </span>
                 </button>
@@ -743,13 +755,14 @@ export default function AssessmentDetailPage() {
         )}
 
         {threatsExpanded && threats.length === 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-            <AlertTriangle className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 mb-3 text-sm">No threats identified yet</p>
-            <Button size="sm" onClick={() => setIsThreatModalOpen(true)}>
-              <Plus className="w-4 h-4 mr-1" />
-              Add First Threat
-            </Button>
+          <div className="bg-card rounded-xl border border-border">
+            <EmptyState
+              icon="threats"
+              title="No threats identified yet"
+              description="Add your first threat to start the assessment"
+              actionLabel="Add First Threat"
+              onAction={() => setIsThreatModalOpen(true)}
+            />
           </div>
         )}
       </div>
@@ -757,24 +770,24 @@ export default function AssessmentDetailPage() {
       {/* ═══════════════════════════════════════════════════════════
           ZONE C — Tools & Analysis (collapsible)
          ═══════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-lg border border-gray-200 mb-4">
+      <div className="bg-card rounded-xl border border-border">
         {/* Collapse header */}
         <button
           onClick={() => setToolsExpanded(!toolsExpanded)}
-          className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors rounded-lg"
+          className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/50 transition-colors rounded-xl"
         >
           <div className="flex items-center gap-2">
-            <Wrench className="w-4 h-4 text-gray-400" />
-            <span className="text-sm font-medium text-gray-700">Tools & Analysis</span>
-            <span className="text-xs text-gray-400">{toolsSummary}</span>
+            <Wrench className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Tools & Analysis</span>
+            <span className="text-xs text-muted-foreground">{toolsSummary}</span>
           </div>
-          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${toolsExpanded ? 'rotate-0' : '-rotate-90'}`} />
+          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${toolsExpanded ? 'rotate-0' : '-rotate-90'}`} />
         </button>
 
         {toolsExpanded && (
           <>
             {/* Tab navigation */}
-            <div className="border-t border-b border-gray-200 px-4">
+            <div className="border-t border-b border-border px-4">
               <nav className="flex -mb-px gap-1">
                 {[
                   { key: 'evidence' as const, label: 'Evidence', icon: FileText, count: evidenceList.length },
@@ -790,13 +803,13 @@ export default function AssessmentDetailPage() {
                     className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors ${
                       analyticsTab === tab.key
                         ? 'border-primary text-primary'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                     }`}
                   >
                     <tab.icon className="w-3.5 h-3.5" />
                     {tab.label}
                     {'count' in tab && tab.count !== undefined && tab.count > 0 && (
-                      <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 rounded-full">{tab.count}</span>
+                      <span className="text-[10px] bg-muted text-muted-foreground px-1.5 rounded-full">{tab.count}</span>
                     )}
                   </button>
                 ))}
@@ -813,15 +826,15 @@ export default function AssessmentDetailPage() {
                     onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                     onDragLeave={() => setDragOver(false)}
                     onDrop={handleDrop}
-                    className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors mb-3 ${
-                      dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-gray-50'
+                    className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors mb-3 ${
+                      dragOver ? 'border-primary bg-primary/5' : 'border-border bg-muted/50'
                     }`}
                   >
                     <div className="flex items-center justify-center gap-3">
-                      <Upload className="w-5 h-5 text-gray-400" />
-                      <p className="text-sm text-gray-500">
+                      <Upload className="w-5 h-5 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">
                         Drop files here or{' '}
-                        <label className="text-blue-600 hover:underline cursor-pointer">
+                        <label className="text-primary hover:underline cursor-pointer">
                           browse
                           <input
                             type="file"
@@ -832,7 +845,7 @@ export default function AssessmentDetailPage() {
                             disabled={isUploading}
                           />
                         </label>
-                        <span className="text-xs text-gray-400 ml-2">Max {MAX_SIZE_MB}MB</span>
+                        <span className="text-xs text-muted-foreground ml-2">Max {MAX_SIZE_MB}MB</span>
                       </p>
                     </div>
                     {isUploading && (
@@ -855,11 +868,11 @@ export default function AssessmentDetailPage() {
                         >
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
                             {getStatusIcon(ev.status)}
-                            <span className="text-sm text-gray-900 truncate">{ev.file_name}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded font-medium shrink-0">
+                            <span className="text-sm text-foreground truncate">{ev.file_name}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium shrink-0">
                               {getDocTypeLabel(ev.document_type)}
                             </span>
-                            <span className="text-xs text-gray-400 shrink-0">{formatFileSize(ev.size_bytes)}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(ev.size_bytes)}</span>
                             {ev.risk_indicators && (
                               <>
                                 {(ev.risk_indicators.critical_vulns ?? 0) > 0 && (
@@ -879,18 +892,18 @@ export default function AssessmentDetailPage() {
                             {ev.status === 'ready' && !ev.analysis_summary && (
                               <button
                                 onClick={async () => { try { await apiClient.analyzeEvidence(ev.id); await loadAssessmentData(); } catch {} }}
-                                className="p-1 text-gray-400 hover:text-purple-600 rounded"
+                                className="p-1 text-muted-foreground hover:text-purple-600 dark:hover:text-purple-400 rounded"
                                 title="Analyze"
                               >
                                 <Sparkles className="w-3.5 h-3.5" />
                               </button>
                             )}
                             {ev.status === 'ready' && (
-                              <button onClick={() => handleDownloadEvidence(ev.id)} className="p-1 text-gray-400 hover:text-blue-600 rounded" title="Download">
+                              <button onClick={() => handleDownloadEvidence(ev.id)} className="p-1 text-muted-foreground hover:text-primary rounded" title="Download">
                                 <Download className="w-3.5 h-3.5" />
                               </button>
                             )}
-                            <button onClick={() => handleDeleteEvidence(ev.id)} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Delete">
+                            <button onClick={() => handleDeleteEvidence(ev.id)} className="p-1 text-muted-foreground hover:text-red-600 dark:hover:text-red-400 rounded" title="Delete">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
@@ -900,7 +913,7 @@ export default function AssessmentDetailPage() {
                   )}
 
                   {evidenceList.length === 0 && (
-                    <p className="text-sm text-gray-400 text-center py-2">
+                    <p className="text-sm text-muted-foreground text-center py-2">
                       Upload vulnerability scans, architecture docs, or other evidence.
                     </p>
                   )}
@@ -961,15 +974,15 @@ export default function AssessmentDetailPage() {
 
 function PriorityBadge({ priority }: { priority: string }) {
   const colors: Record<string, string> = {
-    high: 'bg-red-100 text-red-700',
-    medium: 'bg-yellow-100 text-yellow-700',
-    low: 'bg-green-100 text-green-700',
-    High: 'bg-red-100 text-red-700',
-    Medium: 'bg-yellow-100 text-yellow-700',
-    Low: 'bg-green-100 text-green-700',
+    high: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    medium: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    low: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    High: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    Medium: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    Low: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
   };
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[priority] || 'bg-gray-100 text-gray-700'}`}>
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[priority] || 'bg-muted text-muted-foreground'}`}>
       {priority}
     </span>
   );
@@ -995,33 +1008,33 @@ function ThreatCard({
   onToggleExpand?: () => void;
 }) {
   return (
-    <div className={`bg-white rounded-lg border transition-all ${isExpanded ? 'border-gray-300 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}>
+    <div className={`bg-card rounded-xl border transition-all ${isExpanded ? 'border-border shadow-sm' : 'border-border hover:border-primary/30 hover:shadow-sm'}`}>
       {/* Collapsed row — always visible */}
       <div
         className="flex items-center gap-3 p-3 cursor-pointer"
         onClick={onToggleExpand}
       >
-        <ChevronRight className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+        <ChevronRight className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
         <SeverityBadge severity={threat.severity} />
-        <h3 className="text-sm font-medium text-gray-900 truncate flex-1">{threat.title}</h3>
+        <h3 className="text-sm font-medium text-foreground truncate flex-1">{threat.title}</h3>
         {threat.detected_by === 'ai_intelligence' && <AiBadge />}
         <EnrichmentBadge threatId={threat.id} />
         <MLScoreBadge threatId={threat.id} />
-        <div className="flex items-center gap-3 text-xs text-gray-400 shrink-0">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
           <span>L: {threat.likelihood}</span>
           <span>I: {threat.impact}</span>
         </div>
         <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => onEdit(threat)}
-            className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors"
+            className="p-1 text-muted-foreground hover:text-primary rounded transition-colors"
             title="Edit"
           >
             <Edit className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => onDelete(threat.id)}
-            className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+            className="p-1 text-muted-foreground hover:text-red-600 rounded transition-colors"
             title="Delete"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -1031,36 +1044,36 @@ function ThreatCard({
 
       {/* Expanded details */}
       {isExpanded && (
-        <div className="px-4 pb-4 pt-0 border-t border-gray-100 space-y-3">
+        <div className="px-4 pb-4 pt-0 border-t border-border space-y-3">
           {/* Description */}
           {threat.description && (
-            <p className="text-sm text-gray-600 mt-3">{threat.description}</p>
+            <p className="text-sm text-muted-foreground mt-3">{threat.description}</p>
           )}
 
           {/* Metadata row */}
-          <div className="flex items-center gap-4 text-xs text-gray-500">
-            <span className="capitalize">Status: <strong className="text-gray-700">{threat.status.replace('_', ' ')}</strong></span>
-            <span>Likelihood: <strong className="text-gray-700">{threat.likelihood}</strong></span>
-            <span>Impact: <strong className="text-gray-700">{threat.impact}</strong></span>
-            {threat.cve_ids?.length > 0 && <span>CVEs: <strong className="text-gray-700">{threat.cve_ids.length}</strong></span>}
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <span className="capitalize">Status: <strong className="text-foreground">{threat.status.replace('_', ' ')}</strong></span>
+            <span>Likelihood: <strong className="text-foreground">{threat.likelihood}</strong></span>
+            <span>Impact: <strong className="text-foreground">{threat.impact}</strong></span>
+            {threat.cve_ids?.length > 0 && <span>CVEs: <strong className="text-foreground">{threat.cve_ids.length}</strong></span>}
           </div>
 
           {/* AI Rationale */}
           {threat.ai_rationale && (
-            <div className="p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-lg">
-              <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">AI Rationale</span>
-              <p className="text-sm text-indigo-900 mt-0.5">{threat.ai_rationale}</p>
+            <div className="p-2.5 bg-indigo-50/70 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/40 rounded-xl">
+              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">AI Rationale</span>
+              <p className="text-sm text-indigo-900 dark:text-indigo-200 mt-0.5">{threat.ai_rationale}</p>
             </div>
           )}
 
           {/* Inline Recommendation */}
           {threat.recommendation && (
-            <div className="p-2.5 bg-amber-50/70 border border-amber-100 rounded-lg">
+            <div className="p-2.5 bg-amber-50/70 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/40 rounded-xl">
               <div className="flex items-center gap-1.5">
-                <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
-                <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Recommendation</span>
+                <Lightbulb className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide">Recommendation</span>
               </div>
-              <p className="text-sm text-amber-900 mt-0.5">{threat.recommendation}</p>
+              <p className="text-sm text-amber-900 dark:text-amber-200 mt-0.5">{threat.recommendation}</p>
             </div>
           )}
 
@@ -1068,23 +1081,23 @@ function ThreatCard({
           {recommendations.length > 0 && (
             <div className="space-y-2">
               {recommendations.map((rec) => (
-                <div key={rec.id} className="p-2.5 bg-green-50/70 border border-green-100 rounded-lg">
+                <div key={rec.id} className="p-2.5 bg-emerald-50/70 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/40 rounded-xl">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <Lightbulb className="w-3.5 h-3.5 text-green-600" />
-                      <span className="text-xs font-semibold text-green-700">{rec.title || 'Recommendation'}</span>
+                      <Lightbulb className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{rec.title || 'Recommendation'}</span>
                       {rec.ai_generated && <AiBadge />}
                       <PriorityBadge priority={rec.priority} />
                     </div>
                     <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                      rec.status === 'implemented' ? 'bg-green-100 text-green-700' :
-                      rec.status === 'approved' ? 'bg-blue-100 text-blue-700' :
-                      'bg-gray-100 text-gray-600'
+                      rec.status === 'implemented' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                      rec.status === 'approved' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                      'bg-muted text-muted-foreground'
                     }`}>{rec.status}</span>
                   </div>
-                  <p className="text-sm text-green-900 mt-1">{rec.description || rec.text || ''}</p>
+                  <p className="text-sm text-emerald-900 dark:text-emerald-200 mt-1">{rec.description || rec.text || ''}</p>
                   {(rec.estimated_effort || rec.cost_estimate) && (
-                    <div className="flex gap-3 mt-1 text-xs text-green-600">
+                    <div className="flex gap-3 mt-1 text-xs text-emerald-600 dark:text-emerald-400">
                       {rec.estimated_effort && <span>Effort: {rec.estimated_effort}</span>}
                       {rec.cost_estimate && <span>Cost: {rec.cost_estimate}</span>}
                     </div>

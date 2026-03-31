@@ -68,24 +68,28 @@ export default function NewAssessmentPage() {
     }
   };
 
+  const inputClass = "w-full px-4 py-2 bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors";
+
   return (
-    <div className="max-w-3xl mx-auto">
-      <Link href="/assessments" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-6">
+    <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
+      <Link href="/assessments" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-4 h-4 mr-2" />
         Back to Assessments
       </Link>
 
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">New Assessment</h1>
-      <p className="text-gray-600 mb-8">Create a new threat risk assessment</p>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">New Assessment</h1>
+        <p className="text-muted-foreground mt-1">Create a new threat risk assessment</p>
+      </div>
 
       {error && (
         <Alert type="error" message={error} onClose={() => setError(null)} />
       )}
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-6">
+      <form onSubmit={handleSubmit} className="bg-card rounded-xl border border-border p-6">
         <div className="space-y-6">
           <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="title" className="block text-sm font-medium text-foreground mb-2">
               Assessment Title *
             </label>
             <input
@@ -94,13 +98,13 @@ export default function NewAssessmentPage() {
               required
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className={inputClass}
               placeholder="e.g., Q1 2024 Web Application Security Assessment"
             />
           </div>
 
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="description" className="block text-sm font-medium text-foreground mb-2">
               Description
             </label>
             <textarea
@@ -108,13 +112,13 @@ export default function NewAssessmentPage() {
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className={inputClass}
               placeholder="Describe the purpose of this assessment..."
             />
           </div>
 
           <div>
-            <label htmlFor="system_background" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="system_background" className="block text-sm font-medium text-foreground mb-2">
               System Background
             </label>
             <textarea
@@ -122,13 +126,13 @@ export default function NewAssessmentPage() {
               value={formData.system_background}
               onChange={(e) => setFormData({ ...formData, system_background: e.target.value })}
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className={inputClass}
               placeholder="Provide context about the system being assessed..."
             />
           </div>
 
           <div>
-            <label htmlFor="scope" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="scope" className="block text-sm font-medium text-foreground mb-2">
               Scope
             </label>
             <textarea
@@ -136,13 +140,13 @@ export default function NewAssessmentPage() {
               value={formData.scope}
               onChange={(e) => setFormData({ ...formData, scope: e.target.value })}
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className={inputClass}
               placeholder="Define what is included and excluded from this assessment..."
             />
           </div>
 
           <div>
-            <label htmlFor="tech_stack" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="tech_stack" className="block text-sm font-medium text-foreground mb-2">
               Technology Stack
             </label>
             <input
@@ -150,30 +154,30 @@ export default function NewAssessmentPage() {
               id="tech_stack"
               value={formData.tech_stack}
               onChange={(e) => setFormData({ ...formData, tech_stack: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className={inputClass}
               placeholder="e.g., Python, PostgreSQL, AWS (comma-separated)"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label htmlFor="industry_sector" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="industry_sector" className="block text-sm font-medium text-foreground mb-2">
                 Industry Sector
               </label>
               <select
                 id="industry_sector"
                 value={formData.industry_sector}
                 onChange={(e) => setFormData({ ...formData, industry_sector: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className={inputClass}
               >
                 {INDUSTRY_SECTORS.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
-              <p className="text-xs text-gray-500 mt-1">Used for sector-specific threat intelligence</p>
+              <p className="text-xs text-muted-foreground mt-1">Used for sector-specific threat intelligence</p>
             </div>
             <div>
-              <label htmlFor="overall_impact" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="overall_impact" className="block text-sm font-medium text-foreground mb-2">
                 Overall Impact *
               </label>
               <select
@@ -181,7 +185,7 @@ export default function NewAssessmentPage() {
                 required
                 value={formData.overall_impact}
                 onChange={(e) => setFormData({ ...formData, overall_impact: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className={inputClass}
               >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>

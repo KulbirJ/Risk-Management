@@ -15,22 +15,23 @@ export function Alert({ type, message, onClose }: AlertProps) {
   };
 
   const colors = {
-    error: 'bg-red-50 text-red-800 border-red-200',
-    success: 'bg-green-50 text-green-800 border-green-200',
-    warning: 'bg-yellow-50 text-yellow-800 border-yellow-200',
-    info: 'bg-blue-50 text-blue-800 border-blue-200',
+    error: 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800',
+    success: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+    warning: 'bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+    info: 'bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800',
   };
 
   const Icon = icons[type];
 
   return (
-    <div className={`flex items-start gap-3 p-4 rounded-lg border ${colors[type]}`}>
+    <div className={`flex items-start gap-3 p-4 rounded-xl border animate-fade-in ${colors[type]}`}>
       <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" />
       <p className="flex-1 text-sm">{message}</p>
       {onClose && (
         <button
           onClick={onClose}
           className="text-current hover:opacity-70 transition-opacity"
+          aria-label="Dismiss alert"
         >
           <XCircle className="w-5 h-5" />
         </button>

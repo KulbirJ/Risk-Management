@@ -62,31 +62,33 @@ export default function ActiveRiskModal({
 
   if (!isOpen) return null;
 
+  const inputClass = "w-full px-3 py-2 bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors";
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="fixed inset-0 bg-black bg-opacity-25" onClick={onClose} />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={onClose} />
         
-        <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+        <div className="relative bg-card rounded-xl shadow-xl border border-border max-w-2xl w-full p-6 animate-scale-in">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-900">Edit Risk</h2>
+            <h2 className="text-xl font-semibold text-foreground">Edit Risk</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
-              <X className="h-6 w-6" />
+              <X className="h-5 w-5" />
             </button>
           </div>
 
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-400 px-4 py-3 rounded-xl text-sm">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Title
               </label>
               <input
@@ -94,13 +96,13 @@ export default function ActiveRiskModal({
                 required
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={inputClass}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Residual Risk
                 </label>
                 <select
@@ -111,7 +113,7 @@ export default function ActiveRiskModal({
                       residual_risk: e.target.value as 'Low' | 'Medium' | 'High' | 'Critical',
                     })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputClass}
                 >
                   <option value="Low">Low</option>
                   <option value="Medium">Medium</option>
@@ -121,7 +123,7 @@ export default function ActiveRiskModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Risk Status
                 </label>
                 <select
@@ -132,7 +134,7 @@ export default function ActiveRiskModal({
                       risk_status: e.target.value as 'Planned' | 'Ongoing' | 'Delayed' | 'Completed' | 'Accepted',
                     })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputClass}
                 >
                   <option value="Planned">Planned</option>
                   <option value="Ongoing">Ongoing</option>
@@ -144,7 +146,7 @@ export default function ActiveRiskModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Mitigation Plan
               </label>
               <textarea
@@ -153,7 +155,7 @@ export default function ActiveRiskModal({
                 onChange={(e) =>
                   setFormData({ ...formData, mitigation_plan: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={inputClass}
                 placeholder="Describe the mitigation plan..."
               />
             </div>
