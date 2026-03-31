@@ -105,22 +105,22 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6 flex justify-center">
+      <div className="bg-card rounded-lg border border-border p-6 mb-6 flex justify-center">
         <LoadingSpinner />
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+    <div className="bg-card rounded-lg border border-border p-6 mb-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-purple-100 rounded-lg">
-            <Brain className="w-5 h-5 text-purple-600" />
+          <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+            <Brain className="w-5 h-5 text-purple-600 dark:text-purple-400" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">ML Risk Scoring</h3>
-            <p className="text-sm text-gray-500">Machine learning-powered threat prioritization</p>
+            <h3 className="text-lg font-semibold text-foreground">ML Risk Scoring</h3>
+            <p className="text-sm text-muted-foreground">Machine learning-powered threat prioritization</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -142,7 +142,7 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
       </div>
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 rounded-lg text-sm text-red-700 dark:text-red-400 mb-4">
           {error}
         </div>
       )}
@@ -150,23 +150,23 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
       {/* Model Status */}
       {modelInfo && (
         <div className="grid grid-cols-4 gap-4 mb-4">
-          <div className="p-3 bg-gray-50 rounded-lg text-center">
-            <p className="text-xs text-gray-500 mb-1">Model Status</p>
-            <p className={`text-sm font-bold ${modelInfo.trained ? 'text-green-600' : 'text-amber-600'}`}>
+          <div className="p-3 bg-muted rounded-lg text-center">
+            <p className="text-xs text-muted-foreground mb-1">Model Status</p>
+            <p className={`text-sm font-bold ${modelInfo.trained ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
               {modelInfo.trained ? 'Trained' : 'Not Trained'}
             </p>
           </div>
-          <div className="p-3 bg-gray-50 rounded-lg text-center">
-            <p className="text-xs text-gray-500 mb-1">Features</p>
-            <p className="text-sm font-bold text-gray-900">{modelInfo.feature_count}</p>
+          <div className="p-3 bg-muted rounded-lg text-center">
+            <p className="text-xs text-muted-foreground mb-1">Features</p>
+            <p className="text-sm font-bold text-foreground">{modelInfo.feature_count}</p>
           </div>
-          <div className="p-3 bg-gray-50 rounded-lg text-center">
-            <p className="text-xs text-gray-500 mb-1">Algorithm</p>
-            <p className="text-sm font-bold text-gray-900">{modelInfo.algorithm || 'N/A'}</p>
+          <div className="p-3 bg-muted rounded-lg text-center">
+            <p className="text-xs text-muted-foreground mb-1">Algorithm</p>
+            <p className="text-sm font-bold text-foreground">{modelInfo.algorithm || 'N/A'}</p>
           </div>
-          <div className="p-3 bg-gray-50 rounded-lg text-center">
-            <p className="text-xs text-gray-500 mb-1">Samples</p>
-            <p className="text-sm font-bold text-gray-900">
+          <div className="p-3 bg-muted rounded-lg text-center">
+            <p className="text-xs text-muted-foreground mb-1">Samples</p>
+            <p className="text-sm font-bold text-foreground">
               {modelInfo.training_samples || 'N/A'}
             </p>
           </div>
@@ -175,36 +175,36 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
 
       {/* Train Result */}
       {trainResult && (
-        <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg mb-4">
+        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800/40 rounded-lg mb-4">
           <div className="flex items-center gap-2 mb-2">
-            <Cpu className="w-4 h-4 text-purple-600" />
-            <span className="text-sm font-semibold text-purple-800">Training Complete</span>
+            <Cpu className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <span className="text-sm font-semibold text-purple-800 dark:text-purple-300">Training Complete</span>
           </div>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
-              <span className="text-purple-600">Algorithm:</span>
-              <span className="ml-2 font-bold">{trainResult.algorithm}</span>
+              <span className="text-purple-600 dark:text-purple-400">Algorithm:</span>
+              <span className="ml-2 font-bold text-foreground">{trainResult.algorithm}</span>
             </div>
             <div>
-              <span className="text-purple-600">Samples:</span>
-              <span className="ml-2 font-bold">{trainResult.samples}</span>
+              <span className="text-purple-600 dark:text-purple-400">Samples:</span>
+              <span className="ml-2 font-bold text-foreground">{trainResult.samples}</span>
             </div>
             <div>
-              <span className="text-purple-600">Accuracy:</span>
-              <span className="ml-2 font-bold">
+              <span className="text-purple-600 dark:text-purple-400">Accuracy:</span>
+              <span className="ml-2 font-bold text-foreground">
                 {trainResult.accuracy ? `${(trainResult.accuracy * 100).toFixed(1)}%` : 'N/A'}
               </span>
             </div>
           </div>
           {trainResult.feature_importances && Object.keys(trainResult.feature_importances).length > 0 && (
             <div className="mt-3">
-              <p className="text-xs font-semibold text-purple-700 mb-1">Top Feature Importances:</p>
+              <p className="text-xs font-semibold text-purple-700 dark:text-purple-400 mb-1">Top Feature Importances:</p>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(trainResult.feature_importances)
                   .sort(([, a], [, b]) => b - a)
                   .slice(0, 8)
                   .map(([feature, importance]) => (
-                    <span key={feature} className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                    <span key={feature} className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-2 py-0.5 rounded-full">
                       {feature}: {(importance * 100).toFixed(1)}%
                     </span>
                   ))}
@@ -216,19 +216,19 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
 
       {/* Score Results */}
       {scoreResult && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-lg mb-4">
+        <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/40 rounded-lg mb-4">
           <div className="flex items-center gap-2 mb-3">
-            <BarChart3 className="w-4 h-4 text-green-600" />
-            <span className="text-sm font-semibold text-green-800">
+            <BarChart3 className="w-4 h-4 text-green-600 dark:text-green-400" />
+            <span className="text-sm font-semibold text-green-800 dark:text-green-300">
               Scored {scoreResult.scored} Threat{scoreResult.scored !== 1 ? 's' : ''}
             </span>
           </div>
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {scoreResult.results.map((r) => (
-              <div key={r.threat_id} className="flex items-center justify-between p-2 bg-white rounded border border-green-100">
-                <span className="text-sm text-gray-700 truncate flex-1">{r.threat_id.slice(0, 8)}...</span>
+              <div key={r.threat_id} className="flex items-center justify-between p-2 bg-card rounded border border-green-100 dark:border-green-800/30">
+                <span className="text-sm text-muted-foreground truncate flex-1">{r.threat_id.slice(0, 8)}...</span>
                 <div className="flex items-center gap-3">
-                  <div className="w-32 bg-gray-200 rounded-full h-2">
+                  <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
                       className={`h-2 rounded-full ${
                         r.score >= 80 ? 'bg-red-500' : r.score >= 60 ? 'bg-amber-500' : r.score >= 40 ? 'bg-yellow-400' : 'bg-green-500'
@@ -249,11 +249,11 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
       )}
 
       {/* Expandable sections */}
-      <div className="border-t border-gray-100 pt-4 space-y-3">
+      <div className="border-t border-border pt-4 space-y-3">
         {/* Bias Report */}
         <button
           onClick={() => setShowBias(!showBias)}
-          className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+          className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary"
         >
           {showBias ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           <AlertTriangle className="w-4 h-4 text-amber-500" />
@@ -265,15 +265,15 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
               <LoadingSpinner />
             ) : biasReport ? (
               <div className="space-y-2">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   {biasReport.total_threats} threats scored across {Object.keys(biasReport.sectors).length} sector{Object.keys(biasReport.sectors).length !== 1 ? 's' : ''}
                 </p>
                 {Object.keys(biasReport.sectors).length > 0 && (
                   <div className="space-y-1">
                     {Object.entries(biasReport.sectors).map(([sectorName, s]) => (
-                      <div key={sectorName} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                        <span className="font-medium capitalize">{sectorName}</span>
-                        <div className="flex items-center gap-4 text-xs text-gray-600">
+                      <div key={sectorName} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
+                        <span className="font-medium capitalize text-foreground">{sectorName}</span>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
                           <span>n={s.count}</span>
                           <span>mean={s.mean.toFixed(1)}</span>
                           <span>std={s.std.toFixed(2)}</span>
@@ -284,7 +284,7 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
                 )}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">No bias data available yet. Score some threats first.</p>
+              <p className="text-sm text-muted-foreground">No bias data available yet. Score some threats first.</p>
             )}
           </div>
         )}
@@ -292,7 +292,7 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
         {/* Survival Curve */}
         <button
           onClick={() => setShowSurvival(!showSurvival)}
-          className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+          className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary"
         >
           {showSurvival ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           <Activity className="w-4 h-4 text-indigo-500" />
@@ -305,13 +305,13 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
             ) : survivalCurve ? (
               <div>
                 {survivalCurve.median_survival_days && (
-                  <p className="text-sm text-gray-700 mb-2">
+                  <p className="text-sm text-foreground mb-2">
                     Median risk persistence: <strong>{survivalCurve.median_survival_days} days</strong>
                   </p>
                 )}
                 {survivalCurve.timeline_days && survivalCurve.timeline_days.length > 0 ? (
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500 mb-2">Survival Curve (probability risk remains open over time)</p>
+                  <div className="bg-muted rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground mb-2">Survival Curve (probability risk remains open over time)</p>
                     <div className="flex items-end gap-1 h-24">
                       {survivalCurve.timeline_days.slice(0, 20).map((day, i) => (
                         <div
@@ -322,17 +322,17 @@ export function MLScoringPanel({ assessmentId, onScoreComplete }: MLScoringPanel
                         />
                       ))}
                     </div>
-                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
                       <span>Day 0</span>
                       <span>Day {survivalCurve.timeline_days[survivalCurve.timeline_days.length - 1] || '?'}</span>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">No survival data available yet.</p>
+                  <p className="text-sm text-muted-foreground">No survival data available yet.</p>
                 )}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">Unable to load survival data.</p>
+              <p className="text-sm text-muted-foreground">Unable to load survival data.</p>
             )}
           </div>
         )}
@@ -369,12 +369,12 @@ export function MLScoreBadge({ threatId }: { threatId: string }) {
         ML: {score.toFixed(0)}
       </button>
       {showDetails && explanation.components && explanation.components.length > 0 && (
-        <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50" onClick={(e) => e.stopPropagation()}>
-          <p className="text-xs font-semibold text-gray-700 mb-2">Score Breakdown ({explanation.total_points.toFixed(1)}/{explanation.max_possible})</p>
+        <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg p-3 z-50" onClick={(e) => e.stopPropagation()}>
+          <p className="text-xs font-semibold text-foreground mb-2">Score Breakdown ({explanation.total_points.toFixed(1)}/{explanation.max_possible})</p>
           {explanation.components.slice(0, 5).map((c, i) => (
             <div key={i} className="flex items-center justify-between text-xs py-0.5">
-              <span className="text-gray-600">{c.feature}</span>
-              <span className={c.points > 0 ? 'text-red-600' : 'text-gray-400'}>
+              <span className="text-muted-foreground">{c.feature}</span>
+              <span className={c.points > 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}>
                 +{c.points.toFixed(1)}/{c.max}
               </span>
             </div>

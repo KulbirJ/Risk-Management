@@ -863,7 +863,7 @@ export default function AssessmentDetailPage() {
                       {evidenceList.map((ev) => (
                         <div
                           key={ev.id}
-                          className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer group transition-colors"
+                          className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-muted cursor-pointer group transition-colors"
                           onClick={() => setSelectedEvidence(ev)}
                         >
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -876,12 +876,12 @@ export default function AssessmentDetailPage() {
                             {ev.risk_indicators && (
                               <>
                                 {(ev.risk_indicators.critical_vulns ?? 0) > 0 && (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-600 rounded font-medium shrink-0">
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded font-medium shrink-0">
                                     {ev.risk_indicators.critical_vulns} crit
                                   </span>
                                 )}
                                 {(ev.risk_indicators.high_vulns ?? 0) > 0 && (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded font-medium shrink-0">
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded font-medium shrink-0">
                                     {ev.risk_indicators.high_vulns} high
                                   </span>
                                 )}

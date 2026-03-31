@@ -111,26 +111,26 @@ export function AttackContextPanel({ threatId, threatTitle }: AttackContextPanel
           e.stopPropagation();
           setExpanded((v) => !v);
         }}
-        className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors group"
+        className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-muted transition-colors group"
       >
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-orange-500" />
-          <span className="text-sm font-semibold text-gray-700">ATT&CK Context</span>
+          <span className="text-sm font-semibold text-foreground">ATT&CK Context</span>
           {mappings.length > 0 && (
-            <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-medium">
+            <span className="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-1.5 py-0.5 rounded-full font-medium">
               {mappings.length} technique{mappings.length !== 1 ? 's' : ''}
             </span>
           )}
           {killChains.length > 0 && (
-            <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">
+            <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-1.5 py-0.5 rounded-full font-medium">
               {killChains.length} kill chain{killChains.length !== 1 ? 's' : ''}
             </span>
           )}
         </div>
         {expanded ? (
-          <ChevronUp className="w-4 h-4 text-gray-400" />
+          <ChevronUp className="w-4 h-4 text-muted-foreground" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-gray-400" />
+          <ChevronDown className="w-4 h-4 text-muted-foreground" />
         )}
       </button>
 
@@ -147,7 +147,7 @@ export function AttackContextPanel({ threatId, threatTitle }: AttackContextPanel
           {/* Mapped Techniques chips */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Mapped Techniques
               </span>
               <button
@@ -163,12 +163,12 @@ export function AttackContextPanel({ threatId, threatTitle }: AttackContextPanel
             </div>
 
             {loadingMappings ? (
-              <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 Loading...
               </div>
             ) : mappings.length === 0 ? (
-              <p className="text-xs text-gray-400 italic py-1">
+              <p className="text-xs text-muted-foreground italic py-1">
                 No techniques mapped yet. Click "Manage Mappings" to add or auto-suggest.
               </p>
             ) : (
@@ -176,7 +176,7 @@ export function AttackContextPanel({ threatId, threatTitle }: AttackContextPanel
                 {mappings.map((mapping) => (
                   <div
                     key={mapping.id}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 border border-orange-200 rounded-lg text-xs"
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/40 rounded-lg text-xs"
                     title={mapping.technique?.name || mapping.technique_id}
                   >
                     <a
@@ -184,11 +184,11 @@ export function AttackContextPanel({ threatId, threatTitle }: AttackContextPanel
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="font-mono font-bold text-orange-700 hover:text-orange-900 hover:underline"
+                      className="font-mono font-bold text-orange-700 dark:text-orange-400 hover:text-orange-900 dark:hover:text-orange-300 hover:underline"
                     >
                       {mapping.technique?.mitre_id || '—'}
                     </a>
-                    <span className="text-gray-600 max-w-[140px] truncate">
+                    <span className="text-muted-foreground max-w-[140px] truncate">
                       {mapping.technique?.name || mapping.technique_id}
                     </span>
                     <ConfidenceBadge score={mapping.confidence_score} />
@@ -206,7 +206,7 @@ export function AttackContextPanel({ threatId, threatTitle }: AttackContextPanel
           {/* Kill Chains section */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Attack Scenarios
               </span>
               <button
@@ -229,12 +229,12 @@ export function AttackContextPanel({ threatId, threatTitle }: AttackContextPanel
             </div>
 
             {loadingKillChains ? (
-              <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 Loading...
               </div>
             ) : killChains.length === 0 ? (
-              <p className="text-xs text-gray-400 italic py-1">
+              <p className="text-xs text-muted-foreground italic py-1">
                 No threat progressions built yet. Map ATT&amp;CK techniques first, then click
                 &ldquo;Build Threat Progression&rdquo; to generate a validated ATT&amp;CK kill chain.
               </p>

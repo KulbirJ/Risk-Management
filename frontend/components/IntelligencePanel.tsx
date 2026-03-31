@@ -233,27 +233,27 @@ export function IntelligencePanel({ assessmentId, onEnrichComplete }: Intelligen
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'text-green-700 bg-green-50 border-green-200';
+        return 'text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/40';
       case 'failed':
-        return 'text-red-700 bg-red-50 border-red-200';
+        return 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/40';
       case 'running':
       case 'pending':
-        return 'text-blue-700 bg-blue-50 border-blue-200';
+        return 'text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/40';
       default:
-        return 'text-gray-700 bg-gray-50 border-gray-200';
+        return 'text-muted-foreground bg-muted border-border';
     }
   };
 
   return (
-    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200 p-6 mb-6">
+    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800/40 p-6 mb-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-100 rounded-lg">
-            <Brain className="w-6 h-6 text-indigo-600" />
+          <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+            <Brain className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">AI Intelligence</h3>
-            <p className="text-sm text-gray-600">
+            <h3 className="text-lg font-semibold text-foreground">AI Intelligence</h3>
+            <p className="text-sm text-muted-foreground">
               Powered by Amazon Bedrock (Nova Pro)
             </p>
           </div>
@@ -342,7 +342,7 @@ export function IntelligencePanel({ assessmentId, onEnrichComplete }: Intelligen
       <div className="mt-3">
         <button
           onClick={toggleHistory}
-          className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+          className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center gap-1"
         >
           {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           {showHistory ? 'Hide' : 'Show'} enrichment history
@@ -355,7 +355,7 @@ export function IntelligencePanel({ assessmentId, onEnrichComplete }: Intelligen
                 <Loader2 className="w-4 h-4 animate-spin" /> Loading...
               </div>
             ) : jobHistory.length === 0 ? (
-              <p className="text-sm text-gray-500">No enrichment jobs found.</p>
+              <p className="text-sm text-muted-foreground">No enrichment jobs found.</p>
             ) : (
               jobHistory.map((job) => (
                 <div
@@ -397,17 +397,17 @@ function ResultCard({
   color: string;
 }) {
   const bgColors: Record<string, string> = {
-    yellow: 'bg-yellow-50 border-yellow-200',
-    orange: 'bg-orange-50 border-orange-200',
-    red: 'bg-red-50 border-red-200',
-    green: 'bg-green-50 border-green-200',
+    yellow: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800/40',
+    orange: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800/40',
+    red: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/40',
+    green: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/40',
   };
 
   return (
-    <div className={`rounded-lg border p-3 text-center ${bgColors[color] || 'bg-gray-50 border-gray-200'}`}>
+    <div className={`rounded-lg border p-3 text-center ${bgColors[color] || 'bg-muted border-border'}`}>
       <div className="flex justify-center mb-1">{icon}</div>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
-      <p className="text-xs text-gray-600">{label}</p>
+      <p className="text-2xl font-bold text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -415,7 +415,7 @@ function ResultCard({
 // Badge component for AI-generated items
 export function AiBadge() {
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 border border-indigo-200">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/40">
       <Sparkles className="w-3 h-3" />
       AI
     </span>
