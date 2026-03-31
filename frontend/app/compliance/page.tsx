@@ -6,11 +6,11 @@ import apiClient from '../../lib/api-client';
 import type { ComplianceFramework, ComplianceControl, ComplianceMapping, ComplianceSummary } from '../../lib/types';
 
 const STATUS_OPTIONS = [
-  { value: 'not_assessed', label: 'Not Assessed', color: 'bg-gray-100 text-gray-600' },
-  { value: 'compliant', label: 'Compliant', color: 'bg-green-100 text-green-700' },
-  { value: 'non_compliant', label: 'Non-Compliant', color: 'bg-red-100 text-red-700' },
-  { value: 'partially_compliant', label: 'Partial', color: 'bg-amber-100 text-amber-700' },
-  { value: 'not_applicable', label: 'N/A', color: 'bg-gray-100 text-gray-500' },
+  { value: 'not_assessed', label: 'Not Assessed', color: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' },
+  { value: 'compliant', label: 'Compliant', color: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' },
+  { value: 'non_compliant', label: 'Non-Compliant', color: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' },
+  { value: 'partially_compliant', label: 'Partial', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' },
+  { value: 'not_applicable', label: 'N/A', color: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' },
 ];
 
 export default function CompliancePage() {
@@ -111,9 +111,9 @@ export default function CompliancePage() {
   if (frameworks.length === 0) {
     return (
       <div className="text-center py-20">
-        <Shield className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">No Compliance Frameworks</h2>
-        <p className="text-gray-500 mb-6 max-w-md mx-auto">
+        <Shield className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No Compliance Frameworks</h2>
+        <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
           Seed standard frameworks (NIST 800-53, ISO 27001, CIS Controls v8) to start tracking compliance posture.
         </p>
         <button
@@ -132,8 +132,8 @@ export default function CompliancePage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Compliance</h1>
-          <p className="text-gray-600 mt-1">Framework control mapping and posture tracking</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Compliance</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Framework control mapping and posture tracking</p>
         </div>
       </div>
 
@@ -146,24 +146,24 @@ export default function CompliancePage() {
             <button
               key={s.framework_id}
               onClick={() => setSelectedFw(s.framework_id)}
-              className={`text-left p-5 rounded-lg border-2 transition-all ${
+              className={`text-left p-5 rounded-xl border-2 transition-all ${
                 selectedFw === s.framework_id
-                  ? 'border-indigo-500 bg-indigo-50 shadow-sm'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 dark:border-indigo-400 shadow-sm'
+                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-gray-900">{s.framework_name}</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-white">{s.framework_name}</h3>
                 <span className={`text-2xl font-bold ${pctColor}`}>{s.compliance_pct}%</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-3">
                 <div className={`${barColor} rounded-full h-2 transition-all`} style={{ width: `${s.compliance_pct}%` }} />
               </div>
               <div className="grid grid-cols-4 gap-2 text-xs text-center">
-                <div><span className="font-bold text-green-600">{s.compliant}</span><br /><span className="text-gray-500">Compliant</span></div>
-                <div><span className="font-bold text-red-600">{s.non_compliant}</span><br /><span className="text-gray-500">Non-Comp</span></div>
-                <div><span className="font-bold text-amber-600">{s.partially_compliant}</span><br /><span className="text-gray-500">Partial</span></div>
-                <div><span className="font-bold text-gray-500">{s.not_assessed}</span><br /><span className="text-gray-500">Unassessed</span></div>
+                <div><span className="font-bold text-green-600 dark:text-green-400">{s.compliant}</span><br /><span className="text-gray-500 dark:text-gray-400">Compliant</span></div>
+                <div><span className="font-bold text-red-600 dark:text-red-400">{s.non_compliant}</span><br /><span className="text-gray-500 dark:text-gray-400">Non-Comp</span></div>
+                <div><span className="font-bold text-amber-600 dark:text-amber-400">{s.partially_compliant}</span><br /><span className="text-gray-500 dark:text-gray-400">Partial</span></div>
+                <div><span className="font-bold text-gray-500 dark:text-gray-400">{s.not_assessed}</span><br /><span className="text-gray-500 dark:text-gray-400">Unassessed</span></div>
               </div>
               {s.gap_controls > 0 && (
                 <div className="mt-2 flex items-center gap-1 text-xs text-orange-600">
@@ -178,13 +178,13 @@ export default function CompliancePage() {
 
       {/* Controls table */}
       {currentSummary && (
-        <div className="bg-white rounded-lg border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               {currentSummary.framework_name} — Controls ({currentSummary.total_controls})
             </h2>
           </div>
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {Object.entries(families).map(([family, ctrls]) => {
               const isExpanded = expandedFamily === family;
               const familyMapped = ctrls.filter(c => mappingByControl[c.id]).length;
@@ -192,19 +192,19 @@ export default function CompliancePage() {
                 <div key={family}>
                   <button
                     onClick={() => setExpandedFamily(isExpanded ? null : family)}
-                    className="w-full flex items-center justify-between px-6 py-3 hover:bg-gray-50"
+                    className="w-full flex items-center justify-between px-6 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50"
                   >
                     <div className="flex items-center gap-2">
                       {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                      <span className="font-medium text-gray-900">{family}</span>
-                      <span className="text-xs text-gray-400">({familyMapped}/{ctrls.length} mapped)</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{family}</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">({familyMapped}/{ctrls.length} mapped)</span>
                     </div>
                   </button>
                   {isExpanded && (
                     <div className="px-6 pb-4">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="text-xs text-gray-500 border-b border-gray-200">
+                          <tr className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
                             <th className="text-left py-2 w-24">ID</th>
                             <th className="text-left py-2">Title</th>
                             <th className="text-left py-2 w-20">Source</th>
@@ -217,9 +217,9 @@ export default function CompliancePage() {
                             const currentStatus = mapping?.status || 'not_assessed';
                             const statusOpt = STATUS_OPTIONS.find(o => o.value === currentStatus) || STATUS_OPTIONS[0];
                             return (
-                              <tr key={ctrl.id} className="border-b border-gray-100 last:border-0">
-                                <td className="py-2 font-mono text-xs text-gray-600">{ctrl.control_id}</td>
-                                <td className="py-2 text-gray-800">{ctrl.title}</td>
+                              <tr key={ctrl.id} className="border-b border-gray-100 dark:border-gray-700/50 last:border-0">
+                                <td className="py-2 font-mono text-xs text-gray-600 dark:text-gray-400">{ctrl.control_id}</td>
+                                <td className="py-2 text-gray-800 dark:text-gray-200">{ctrl.title}</td>
                                 <td className="py-2">
                                   {mapping?.mapped_by && mapping.mapped_by !== 'manual' && (
                                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
@@ -237,7 +237,7 @@ export default function CompliancePage() {
                                     <select
                                       value={currentStatus}
                                       onChange={e => handleStatusChange(ctrl.id, e.target.value)}
-                                      className={`text-xs rounded px-2 py-1 border border-gray-300 ${statusOpt.color}`}
+                                      className={`text-xs rounded px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 ${statusOpt.color}`}
                                     >
                                       {STATUS_OPTIONS.map(o => (
                                         <option key={o.value} value={o.value}>{o.label}</option>
