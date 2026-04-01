@@ -97,6 +97,8 @@ export default function DashboardPage() {
           icon={FileText}
           iconBg="bg-blue-100 dark:bg-blue-900/30"
           iconColor="text-blue-600 dark:text-blue-400"
+          href="/assessments"
+          subtitle="View all assessments"
         />
         <StatCard
           label="Active Risks"
@@ -105,6 +107,8 @@ export default function DashboardPage() {
           iconBg="bg-amber-100 dark:bg-amber-900/30"
           iconColor="text-amber-600 dark:text-amber-400"
           alert={stats.activeRisks > 0}
+          href="/active-risks"
+          subtitle="View risk register"
         />
         <StatCard
           label="Critical Threats"
@@ -113,25 +117,18 @@ export default function DashboardPage() {
           iconBg="bg-red-100 dark:bg-red-900/30"
           iconColor="text-red-600 dark:text-red-400"
           alert={stats.criticalThreats > 0}
+          href="/assessments"
+          subtitle="View threat details"
         />
-        <Link href="/intelligence" className="group">
-          <div className="bg-card rounded-xl border border-border p-6 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">ML Model</p>
-                <p className={`text-xl font-bold mt-2 ${mlModel?.trained ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                  {mlModel?.trained ? 'Trained' : 'Not Trained'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {mlModel?.trained ? `${mlModel.algorithm} · ${mlModel.feature_count} features` : 'Click to configure'}
-                </p>
-              </div>
-              <div className="bg-purple-100 dark:bg-purple-900/30 rounded-xl p-3 group-hover:scale-110 transition-transform duration-200">
-                <Brain className="w-7 h-7 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </div>
-        </Link>
+        <StatCard
+          label="ML Model"
+          value={mlModel?.trained ? 'Trained' : 'Not Trained'}
+          icon={Brain}
+          iconBg="bg-purple-100 dark:bg-purple-900/30"
+          iconColor="text-purple-600 dark:text-purple-400"
+          href="/intelligence"
+          subtitle={mlModel?.trained ? `${mlModel.algorithm} · ${mlModel.feature_count} features` : 'Click to configure'}
+        />
       </div>
 
       {/* Quick Actions */}
@@ -349,29 +346,39 @@ function StatCard({
   iconBg,
   iconColor,
   alert = false,
+  href,
+  subtitle,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   icon: typeof FileText;
   iconBg: string;
   iconColor: string;
   alert?: boolean;
+  href?: string;
+  subtitle?: string;
 }) {
-  return (
-    <div className="bg-card rounded-xl border border-border p-6 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+  const content = (
+    <div className="bg-card rounded-xl border border-border p-6 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 h-full">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-muted-foreground">{label}</p>
           <p className={`text-3xl font-bold mt-2 animate-count-up ${alert ? 'text-red-600 dark:text-red-400' : 'text-foreground'}`}>
             {value}
           </p>
+          {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
         </div>
-        <div className={`${iconBg} rounded-xl p-3`}>
+        <div className={`${iconBg} rounded-xl p-3 group-hover:scale-110 transition-transform duration-200`}>
           <Icon className={`w-7 h-7 ${iconColor}`} />
         </div>
       </div>
     </div>
   );
+
+  if (href) {
+    return <Link href={href} className="group">{content}</Link>;
+  }
+  return content;
 }
 
 // ── Risk Heatmap ─────────────────────────────────────────────────────────────

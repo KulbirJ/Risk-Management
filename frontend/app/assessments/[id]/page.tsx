@@ -486,6 +486,7 @@ export default function AssessmentDetailPage() {
           <div className="flex items-center gap-2 shrink-0">
             <TriggerAssessmentButton
               assessmentId={assessmentId}
+              assessmentTitle={assessment?.title}
               onComplete={loadAssessmentData}
             />
             <div className="relative" ref={overflowRef}>

@@ -49,8 +49,36 @@ def create_app() -> FastAPI:
     # Health check endpoint
     @app.get("/health")
     async def health_check():
-        """Service health check."""
-        return {"status": "healthy", "version": settings.app_version}
+        """Service health check — includes DB ping and Bedrock config status."""
+        from sqlalchemy import text
+        from .db.database import SessionLocal
+        from .services.bedrock_service import BedrockService
+
+        checks: dict = {"version": settings.app_version}
+
+        # DB ping
+        try:
+            db = SessionLocal()
+            db.execute(text("SELECT 1"))
+            db.close()
+            checks["db"] = "ok"
+        except Exception as exc:
+            checks["db"] = f"error: {exc}"
+
+        # Bedrock config (does NOT make a live call — use /intelligence/bedrock-test for that)
+        try:
+            bedrock = BedrockService()
+            checks["bedrock"] = {
+                "enabled": bedrock.enabled,
+                "model_id": bedrock.model_id,
+                "region": bedrock.region,
+                "client_initialized": bedrock.client is not None,
+            }
+        except Exception as exc:
+            checks["bedrock"] = {"enabled": False, "error": str(exc)}
+
+        overall = "healthy" if checks["db"] == "ok" else "degraded"
+        return {"status": overall, **checks}
     
     # Seed endpoint for database initialization
     @app.post("/seed")
@@ -462,7 +490,7 @@ def create_app() -> FastAPI:
             return {"status": "error", "message": str(e)}
 
     # Include API routers
-    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack, intel, compliance
+    from .api import assessments, threats, evidence, recommendations, active_risks, audit_logs, intelligence, attack, intel, compliance, supply_chain
     
     app.include_router(
         assessments.router,
@@ -513,6 +541,11 @@ def create_app() -> FastAPI:
         compliance.router,
         prefix="/api/v1/compliance",
         tags=["compliance"]
+    )
+    app.include_router(
+        supply_chain.router,
+        prefix="/api/v1/supply-chain",
+        tags=["supply-chain"]
     )
 
     # ML routers — only loaded when numpy/scikit-learn/networkx are available
@@ -746,6 +779,22 @@ try:
                 db.close()
         except Exception as exc:
             _logger.error("[FULL_RUN] Fatal error: %s\n%s", exc, traceback.format_exc())
+            # Best-effort: mark the job as failed so it doesn't stay stuck at "running"
+            try:
+                from .db.database import SessionLocal
+                from .models.models import IntelligenceJob
+                _db = SessionLocal()
+                try:
+                    _job = _db.query(IntelligenceJob).filter(IntelligenceJob.id == job_id).first()
+                    if _job and _job.status in ("pending", "running"):
+                        _job.status = "failed"
+                        _job.error_message = f"Fatal pipeline error: {str(exc)[:500]}"
+                        _job.completed_at = datetime.utcnow()
+                        _db.commit()
+                finally:
+                    _db.close()
+            except Exception:
+                pass
             return {"statusCode": 500, "body": f"Full assessment run failed: {exc}"}
 
     def lambda_handler(event, context):

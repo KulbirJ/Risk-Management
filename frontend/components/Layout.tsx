@@ -24,6 +24,8 @@ import {
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { isCognitoEnabled } from '../lib/amplify-config';
 import { useTheme } from './ThemeProvider';
+import { usePipeline } from './PipelineContext';
+import { PipelineNavIndicator } from './PipelineProgressBar';
 
 interface LayoutProps {
   children: ReactNode;
@@ -42,6 +44,7 @@ const navigation = [
 export default function Layout({ children }: LayoutProps) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const { pipelines } = usePipeline();
   const { user, signOut } = isCognitoEnabled
     ? useAuthenticator((context) => [context.user])
     : { user: null, signOut: null };
@@ -174,6 +177,9 @@ export default function Layout({ children }: LayoutProps) {
             );
           })}
         </nav>
+
+        {/* Active pipeline indicators */}
+        {!collapsed && <PipelineNavIndicator pipelines={pipelines} />}
 
         {/* Footer */}
         <div className="p-3 border-t border-white/10 space-y-2">

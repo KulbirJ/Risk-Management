@@ -887,4 +887,214 @@ class ComplianceSummary(BaseModel):
     not_applicable: int = 0
     not_assessed: int = 0
     compliance_pct: float = 0.0
+
+
+# ─────────────────────────────────────────────────────────────────
+# Supply Chain Risk Assessment Schemas (CCCS ITSAP.10.070)
+# ─────────────────────────────────────────────────────────────────
+
+class SupplyChainAssessmentBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    scope: Optional[str] = None
+    industry_sector: Optional[str] = None
+    # Step 1 — Technology Sensitivity
+    technology_sensitivity: str = "Medium"  # Low | Medium | High
+    technology_function: Optional[str] = None
+    data_classification: Optional[str] = None
+    ecosystem_importance: Optional[str] = None
+    # Step 3 — Deployment context
+    deployment_environment: Optional[str] = None
+    cyber_defense_level: str = "Medium"  # Low | Medium | High
+    deployment_notes: Optional[str] = None
+
+
+class SupplyChainAssessmentCreate(SupplyChainAssessmentBase):
+    pass
+
+
+class SupplyChainAssessmentUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    scope: Optional[str] = None
+    industry_sector: Optional[str] = None
+    status: Optional[str] = None
+    technology_sensitivity: Optional[str] = None
+    technology_function: Optional[str] = None
+    data_classification: Optional[str] = None
+    ecosystem_importance: Optional[str] = None
+    deployment_environment: Optional[str] = None
+    cyber_defense_level: Optional[str] = None
+    deployment_notes: Optional[str] = None
+    sbom_format: Optional[str] = None
+
+
+class SupplyChainAssessmentRead(SupplyChainAssessmentBase):
+    id: UUID
+    tenant_id: UUID
+    owner_user_id: UUID
+    status: str
+    overall_risk_score: Optional[int] = None
+    overall_risk_level: Optional[str] = None
+    sbom_uploaded: bool = False
+    sbom_format: Optional[str] = None
+    sbom_parsed_at: Optional[datetime] = None
+    vendor_count: Optional[int] = 0
+    dependency_count: Optional[int] = 0
+    critical_dependency_count: Optional[int] = 0
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ─────────────────────────────────────────────────────────────────
+# Supply Chain Vendor Schemas (CCCS Step 2 — Supplier Confidence)
+# ─────────────────────────────────────────────────────────────────
+
+class SupplyChainVendorBase(BaseModel):
+    name: str
+    website: Optional[str] = None
+    vendor_type: Optional[str] = None       # oss | commercial | internal | saas | paas | iaas
+    country_of_origin: Optional[str] = None
+    # Step 2 sub-factors
+    foci_risk: str = "Low"                  # Low | Medium | High
+    geopolitical_risk: str = "Low"          # Low | Medium | High
+    business_practices_risk: str = "Low"    # Low | Medium | High
+    security_certifications: Optional[List[str]] = []
+    data_protection_maturity: str = "Medium"   # Low | Medium | High
+    vuln_mgmt_maturity: str = "Medium"
+    security_policies_maturity: str = "Medium"
+    notes: Optional[str] = None
+
+
+class SupplyChainVendorCreate(SupplyChainVendorBase):
+    assessment_id: UUID
+
+
+class SupplyChainVendorUpdate(BaseModel):
+    name: Optional[str] = None
+    website: Optional[str] = None
+    vendor_type: Optional[str] = None
+    country_of_origin: Optional[str] = None
+    foci_risk: Optional[str] = None
+    geopolitical_risk: Optional[str] = None
+    business_practices_risk: Optional[str] = None
+    security_certifications: Optional[List[str]] = None
+    data_protection_maturity: Optional[str] = None
+    vuln_mgmt_maturity: Optional[str] = None
+    security_policies_maturity: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SupplyChainVendorRead(SupplyChainVendorBase):
+    id: UUID
+    tenant_id: UUID
+    assessment_id: UUID
+    supplier_confidence_level: Optional[str] = None   # High | Medium | Low
+    supplier_risk_score: Optional[int] = None          # 0-100
+    dependency_count: Optional[int] = 0
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ─────────────────────────────────────────────────────────────────
+# Supply Chain Dependency Schemas (SBOM components / CVE enrichment)
+# ─────────────────────────────────────────────────────────────────
+
+class SupplyChainDependencyBase(BaseModel):
+    name: str
+    version: Optional[str] = None
+    package_type: Optional[str] = None     # npm | pip | maven | nuget | gem | go | cargo | container
+    source: str = "direct"                 # direct | transitive
+    license: Optional[str] = None
+    repository_url: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SupplyChainDependencyCreate(SupplyChainDependencyBase):
+    assessment_id: UUID
+    vendor_id: Optional[UUID] = None
+    cve_ids: Optional[List[str]] = []
+    cvss_score: Optional[float] = None
+
+
+class SupplyChainDependencyUpdate(BaseModel):
+    name: Optional[str] = None
+    version: Optional[str] = None
+    package_type: Optional[str] = None
+    source: Optional[str] = None
+    license: Optional[str] = None
+    vendor_id: Optional[UUID] = None
+    cve_ids: Optional[List[str]] = None
+    cvss_score: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class SupplyChainDependencyRead(SupplyChainDependencyBase):
+    id: UUID
+    tenant_id: UUID
+    assessment_id: UUID
+    vendor_id: Optional[UUID] = None
+    sbom_source: Optional[str] = None
+    cve_ids: List[str] = []
+    cvss_score: Optional[float] = None
+    risk_score: Optional[int] = None
+    risk_level: Optional[str] = None
+    ml_enriched: bool = False
+    enriched_at: Optional[datetime] = None
+    is_in_cisa_kev: bool = False
+    has_public_poc: bool = False
+    has_patch: bool = False
+    epss_score: Optional[float] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ─────────────────────────────────────────────────────────────────
+# SBOM + Scoring Schemas
+# ─────────────────────────────────────────────────────────────────
+
+class SBOMParseRequest(BaseModel):
+    """SBOM content to parse (CycloneDX JSON or SPDX JSON)."""
+    sbom_content: dict        # Raw parsed SBOM JSON
+    sbom_format: str = "cyclonedx"   # cyclonedx | spdx
+
+
+class SBOMParseResponse(BaseModel):
+    """Dependencies extracted from an SBOM."""
+    format_detected: str
+    component_count: int
+    components: List[SupplyChainDependencyCreate]
+    warnings: List[str] = []
+
+
+class SCRiskScoreResponse(BaseModel):
+    """Recalculated overall risk score for a supply chain assessment."""
+    assessment_id: UUID
+    technology_sensitivity: str
+    avg_supplier_risk: float
+    deployment_risk: str
+    overall_risk_score: int
+    overall_risk_level: str
+    vendor_scores: List[dict] = []
+    dependency_critical_count: int = 0
+
+
+class SCEnrichDependenciesRequest(BaseModel):
+    """Request to run ML enrichment on all unenriched dependencies."""
+    dependency_ids: Optional[List[UUID]] = None  # None = enrich all unenriched
+
+
+class SCEnrichDependenciesResponse(BaseModel):
+    enriched: int
+    skipped: int
+    errors: List[str] = []
     gap_controls: int = 0

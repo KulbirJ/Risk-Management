@@ -4,6 +4,7 @@ import './globals.css';
 import { AuthProvider } from '../components/AuthProvider';
 import { ThemeProvider } from '../components/ThemeProvider';
 import { ToastProvider } from '../components/Toast';
+import { PipelineProvider } from '../components/PipelineContext';
 import Layout from '../components/Layout';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -24,7 +25,9 @@ export default function RootLayout({
         <ThemeProvider>
           <ToastProvider>
             <AuthProvider>
-              <Layout>{children}</Layout>
+              <PipelineProvider>
+                <Layout>{children}</Layout>
+              </PipelineProvider>
             </AuthProvider>
           </ToastProvider>
         </ThemeProvider>
