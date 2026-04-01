@@ -944,26 +944,34 @@ export default function AssessmentReportPage() {
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">A high-level overview for leadership. Understand your risk posture at a glance without technical complexity.</p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-              {/* Severity distribution */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-                <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 uppercase tracking-wide">Threat Severity Breakdown</h3>
-                <SeverityDistBar stats={report.stats} />
-                <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
-                  <span>AI-Enriched: <strong className="text-gray-700 dark:text-gray-300">{report.stats.enriched}</strong></span>
-                  <span>Public exploits found: <strong className="text-gray-700 dark:text-gray-300">{report.stats.with_exploits}</strong></span>
-                  <span>Attack scenarios modeled: <strong className="text-gray-700 dark:text-gray-300">{report.stats.with_kill_chains}</strong></span>
-                  <span>Total threats: <strong className="text-gray-700 dark:text-gray-300">{report.stats.total}</strong></span>
-                </div>
-              </div>
+            {/* Methodology */}
+            <div className="bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-200 dark:border-blue-800 p-5 mb-6">
+              <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-1">
+                <BookOpen className="w-4 h-4 text-blue-500" /> How This Assessment Was Performed
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                This report is powered by <strong className="text-gray-800 dark:text-gray-200">EdgeVision Risk Intelligence</strong> — combining real-time threat intelligence, machine learning, and automated attack modeling to deliver risk assessments grounded in evidence, not guesswork. Every threat was matched against NVD, CISA KEV, and live feeds from AlienVault OTX and public exploit repositories, then scored 0–100 by our AI engine based on CVSS severity, exploit availability, active threat campaigns, and your sector&apos;s attack frequency. Where applicable, threats are mapped to MITRE ATT&amp;CK and paired with AI-generated kill chain scenarios to give your team actionable detection and response playbooks.
+              </p>
+            </div>
 
-              {/* Key findings */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-                <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 uppercase tracking-wide flex items-center gap-1">
-                  <AlertTriangle className="w-4 h-4 text-yellow-500" /> Key Findings
-                </h3>
-                <KeyFindings report={report} />
+            {/* Severity distribution — full width */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 mb-6">
+              <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 uppercase tracking-wide">Threat Severity Breakdown</h3>
+              <SeverityDistBar stats={report.stats} />
+              <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <span>AI-Enriched: <strong className="text-gray-700 dark:text-gray-300">{report.stats.enriched}</strong></span>
+                <span>Public exploits found: <strong className="text-gray-700 dark:text-gray-300">{report.stats.with_exploits}</strong></span>
+                <span>Attack scenarios modeled: <strong className="text-gray-700 dark:text-gray-300">{report.stats.with_kill_chains}</strong></span>
+                <span>Total threats: <strong className="text-gray-700 dark:text-gray-300">{report.stats.total}</strong></span>
               </div>
+            </div>
+
+            {/* Key findings — full width */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 mb-6">
+              <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 uppercase tracking-wide flex items-center gap-1">
+                <AlertTriangle className="w-4 h-4 text-yellow-500" /> Key Findings
+              </h3>
+              <KeyFindings report={report} />
             </div>
 
             {/* Top 5 risks table */}
