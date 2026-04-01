@@ -38,6 +38,7 @@ class AssessmentService:
             system_background=assessment_data.system_background,
             scope=assessment_data.scope,
             tech_stack=assessment_data.tech_stack or [],
+            industry_sector=assessment_data.industry_sector,
             overall_impact=assessment_data.overall_impact,
             status="draft"
         )
