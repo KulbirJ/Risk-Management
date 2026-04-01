@@ -97,8 +97,12 @@ function KeyFindings({ report }: { report: AssessmentReport }) {
   const { stats, threats } = report;
   const findings: Array<{ icon: string; text: string; severity: 'critical' | 'warning' | 'info' | 'success' }> = [];
 
-  if (stats.critical > 0)
-    findings.push({ icon: '🔴', severity: 'critical', text: `${stats.critical} critical issue${stats.critical > 1 ? 's' : ''} found that need${stats.critical === 1 ? 's' : ''} immediate attention — these pose the highest risk to your organization.` });
+  if (stats.critical > 0) {
+    findings.push({ icon: '🔴', severity: 'critical', text: `${stats.critical} critical issue${stats.critical > 1 ? 's' : ''} found that need${stats.critical === 1 ? 's' : ''} immediate attention:` });
+    threats.filter(t => (t.severity || '').toLowerCase() === 'critical').forEach(t => {
+      findings.push({ icon: '•', severity: 'critical', text: `${t.title}${t.likelihood_score ? ` (Risk Score: ${t.likelihood_score}/100)` : ''}` });
+    });
+  }
   if (stats.at_risk > 0)
     findings.push({ icon: '⚠️', severity: 'warning', text: `${stats.at_risk} risk${stats.at_risk > 1 ? 's are' : ' is'} being actively monitored in the risk register, meaning they are known but not yet fully resolved.` });
   if (stats.with_exploits > 0)
@@ -181,7 +185,7 @@ function ExecRecommendations({ threats }: { threats: ThreatReportItem[] }) {
       {recs.slice(0, 12).map((r, i) => (
         <li key={i} className="flex gap-3 text-sm">
           <span className="font-bold text-gray-400 dark:text-gray-500 flex-shrink-0 w-5">{i + 1}.</span>
-          <span className="text-gray-700 dark:text-gray-300">{r.title ? <><strong className="text-gray-900 dark:text-white">{r.title}:</strong> {r.description}</> : r.description}</span>
+          <span className="text-gray-700 dark:text-gray-300">{r.title && r.title.trim().toLowerCase() !== r.description.trim().toLowerCase() ? <><strong className="text-gray-900 dark:text-white">{r.title}:</strong> {r.description}</> : r.description}</span>
         </li>
       ))}
     </ol>
@@ -471,7 +475,7 @@ function ThreatCard({ threat, index }: { threat: ThreatReportItem; index: number
                     r.priority?.toLowerCase() === 'high'     ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' :
                     'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
                   }`}>{r.priority?.toUpperCase() ?? 'MED'}</span>
-                  <span>{r.title ? <><strong className="text-gray-900 dark:text-white">{r.title}</strong> — {r.description}</> : r.description}</span>
+                  <span>{r.title && r.title.trim().toLowerCase() !== r.description.trim().toLowerCase() ? <><strong className="text-gray-900 dark:text-white">{r.title}</strong> — {r.description}</> : r.description}</span>
                 </li>
               ))}
             </ul>
@@ -939,21 +943,6 @@ export default function AssessmentReportPage() {
               Section 1 — Executive Summary
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">A high-level overview for leadership. Understand your risk posture at a glance without technical complexity.</p>
-
-            {/* Stat cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-              {[
-                { label: 'Critical', value: report.stats.critical, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/30', border: 'border-red-200 dark:border-red-800' },
-                { label: 'High',     value: report.stats.high,     color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/30', border: 'border-orange-200 dark:border-orange-800' },
-                { label: 'Active Risks',  value: report.stats.at_risk,  color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950/30', border: 'border-purple-200 dark:border-purple-800' },
-                { label: 'Resolved',value: report.stats.mitigated,color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950/30', border: 'border-green-200 dark:border-green-800' },
-              ].map(c => (
-                <div key={c.label} className={`rounded-xl border ${c.border} ${c.bg} p-4 text-center`}>
-                  <p className={`text-4xl font-extrabold ${c.color}`}>{c.value}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{c.label}</p>
-                </div>
-              ))}
-            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
               {/* Severity distribution */}
